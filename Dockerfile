@@ -2,7 +2,7 @@
 
 # ---- base: Node + pnpm, with the compilers better-sqlite3 needs ----
 # The full (non-slim) image already has python3, make and g++ for node-gyp.
-FROM node:22-bookworm AS base
+FROM node:26-bookworm AS base
 # Installed globally (not via corepack) so every user, including `node`, can run it.
 RUN npm install -g pnpm@10.28.0
 WORKDIR /app
@@ -34,7 +34,7 @@ ARG APP_ORIGIN=https://battle.sonhal.no
 RUN APP_ORIGIN=$APP_ORIGIN pnpm build
 
 # ---- app: what runs behind Caddy ----
-FROM node:22-bookworm-slim AS app
+FROM node:26-bookworm-slim AS app
 ENV NODE_ENV=production \
 	PORT=3000 \
 	DATABASE_PATH=/data/league.db
