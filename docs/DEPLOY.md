@@ -89,20 +89,20 @@ docker compose logs familybattle   # expect: Listening on http://0.0.0.0:3000
 Week 1 first, so it is playable as soon as possible:
 
 ```sh
-ANTHROPIC_API_KEY=sk-ant-... docker compose run --rm tools generate -- --weeks 1 --quiet
+ANTHROPIC_API_KEY=sk-ant-... docker compose run --rm tools generate --weeks 1 --quiet
 ```
 
 Then the rest of the season plus two reserves. This takes a while, since each puzzle is a
 separate, carefully checked request:
 
 ```sh
-ANTHROPIC_API_KEY=sk-ant-... docker compose run --rm tools generate -- --weeks 2-13 --reserves 2 --quiet
+ANTHROPIC_API_KEY=sk-ant-... docker compose run --rm tools generate --weeks 2-13 --reserves 2 --quiet
 ```
 
 - `--quiet` hides the answers (the admin also plays). Without it the puzzles are printed.
 - Re-running is safe: weeks that already have a puzzle are skipped.
 - Check what exists without revealing answers:
-  `docker compose run --rm tools sql -- "SELECT id, week, status FROM puzzles"`
+  `docker compose run --rm tools sql "SELECT id, week, status FROM puzzles"`
 
 ## 6. Caddy site
 
@@ -170,13 +170,13 @@ Check the volume name with `docker volume ls`. Compose prefixes it with the proj
 
 ## Day-to-day operations
 
-| Task                                      | Command                                                                                                     |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Update the app                            | `git pull && docker compose build familybattle && docker compose up -d familybattle`                        |
-| Logs                                      | `docker compose logs -f familybattle`                                                                       |
-| Inspect data                              | `docker compose run --rm tools sql -- "SELECT * FROM players"`                                              |
-| Void week N (until the admin page exists) | `docker compose run --rm tools sql -- "UPDATE puzzles SET status='voided', void_note='<why>' WHERE week=N"` |
-| Regenerate an unplayed week               | `ANTHROPIC_API_KEY=... docker compose run --rm tools generate -- --replace N --quiet`                       |
+| Task                                      | Command                                                                                                  |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Update the app                            | `git pull && docker compose build familybattle && docker compose up -d familybattle`                     |
+| Logs                                      | `docker compose logs -f familybattle`                                                                    |
+| Inspect data                              | `docker compose run --rm tools sql "SELECT * FROM players"`                                              |
+| Void week N (until the admin page exists) | `docker compose run --rm tools sql "UPDATE puzzles SET status='voided', void_note='<why>' WHERE week=N"` |
+| Regenerate an unplayed week               | `ANTHROPIC_API_KEY=... docker compose run --rm tools generate --replace N --quiet`                       |
 
 The tools image is built from the source, so rebuild it after `git pull`:
 `docker compose --profile tools build tools`.

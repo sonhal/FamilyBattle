@@ -73,7 +73,7 @@ src/
 scripts/generate-puzzles.ts  puzzle generator (Claude API)
 scripts/sql.ts, backup.ts    hand fixes and backups (the image has no sqlite3 CLI)
 scripts/seed-sample.ts       fixed sample puzzle for local dev
-Dockerfile                   stages: deps → tools (CLI) / build → app
+Dockerfile                   stages: base → deps → tools (CLI) / build; prod-deps + build → app
 docker-compose.yml           app service + `tools` profile sharing the data volume
 static/manifest.webmanifest, icons
 ```
@@ -212,7 +212,7 @@ ones with the same key, and the season tiebreak.
 
 ## Puzzle generation script
 
-`npm run generate -- --weeks 1-13 --reserves 2 [--replace 5]`
+`pnpm generate --weeks 1-13 --reserves 2 [--replace 5]`
 
 - Calls the Claude API (`@anthropic-ai/sdk`, model `claude-opus-5-5`) **one puzzle at a time**. Each
   call passes all previously generated words and categories, plus any `void_note`s, so the season
@@ -241,8 +241,8 @@ ones with the same key, and the season tiebreak.
 
 See `docs/DEPLOY.md` for the step-by-step runbook.
 
-- Multi-stage `Dockerfile`. The `deps` stage uses `node:22-bookworm` (it has the compilers
-  better-sqlite3 needs). `tools` adds the source for the CLI scripts. `app` is
+- Multi-stage `Dockerfile`. The `base` stage uses `node:22-bookworm` (it has the compilers
+  better-sqlite3 needs) plus a global pnpm. `prod-deps` installs runtime dependencies only. `tools` adds the source for the CLI scripts. `app` is
   `node:22-bookworm-slim` with only `build/` and production `node_modules`, running as `node`.
 - `docker-compose.yml`: a named volume at `/data`, the auth/group env vars from `.env`, the Caddy
   network, and no published ports.
@@ -250,7 +250,7 @@ See `docs/DEPLOY.md` for the step-by-step runbook.
 - Backups: a nightly host cron job runs `docker compose run --rm tools backup` (better-sqlite3's online
   backup, safe while the app runs) and copies the file off the volume. This matters because the
   DB holds the whole season.
-- Hand fixes: `docker compose run --rm tools sql -- "UPDATE ..."`.
+- Hand fixes: `docker compose run --rm tools sql "UPDATE ..."`.
 
 ## Implementation notes (SvelteKit 3)
 
@@ -259,9 +259,8 @@ See `docs/DEPLOY.md` for the step-by-step runbook.
 - `$app/env` replaces `$app/environment`; the `Handle` type comes from `@sveltejs/kit/hooks`.
 - adapter-node no longer reads an `ORIGIN` env var. The public origin is `paths.origin`, set at
   build time from the `APP_ORIGIN` Docker build arg. SvelteKit's CSRF check compares against it.
-- npm 10 crashes resolving this dependency tree (`Cannot read properties of null (reading
-'edgesOut')`). Use `npx npm@11 install` locally. `npm ci` from the lockfile works with npm 10
-  (and in Docker).
+- Package manager: pnpm (pinned via `packageManager`). `pnpm-workspace.yaml` allows the build
+  scripts of better-sqlite3 and esbuild, which pnpm blocks by default.
 
 ## Milestones (rush plan)
 

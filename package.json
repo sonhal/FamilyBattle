@@ -11,7 +11,7 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"test:unit": "vitest",
-		"test": "npm run test:unit -- --run",
+		"test": "vitest --run",
 		"lint": "prettier --check .",
 		"format": "prettier --write .",
 		"generate": "tsx scripts/generate-puzzles.ts",
@@ -46,8 +46,5 @@
 		"luxon": "^3.7.2",
 		"zod": "^4.6.5"
 	},
-	"allowScripts": {
-		"better-sqlite3@13.0.3": true,
-		"esbuild@0.28.2": true
-	}
+	"packageManager": "pnpm@10.28.0"
 }

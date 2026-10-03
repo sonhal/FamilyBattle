@@ -1,7 +1,7 @@
 /**
  * Inserts a fixed sample puzzle for local testing (no API key needed).
  *
- *   npm run seed:sample -- 1      # sample puzzle as week 1
+ *   pnpm seed:sample 1      # sample puzzle as week 1
  */
 import { config } from '../src/lib/server/config.ts';
 import { openDatabase } from '../src/lib/server/db.ts';

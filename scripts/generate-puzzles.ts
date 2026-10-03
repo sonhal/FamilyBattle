@@ -1,9 +1,9 @@
 /**
  * Generates puzzles with the Claude API and stores them in the database.
  *
- *   npm run generate -- --weeks 1-13 --reserves 2
- *   npm run generate -- --replace 5          # regenerate week 5 (only if nobody has played it)
- *   npm run generate -- --weeks 1-3 --dry-run
+ *   pnpm generate --weeks 1-13 --reserves 2
+ *   pnpm generate --replace 5          # regenerate week 5 (only if nobody has played it)
+ *   pnpm generate --weeks 1-3 --dry-run
  *
  * Idempotent: weeks that already have a puzzle are skipped, so a failed run
  * can simply be repeated. Needs ANTHROPIC_API_KEY in the environment.

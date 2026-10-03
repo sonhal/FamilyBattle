@@ -19,7 +19,7 @@ services:
       - proxy
 
   # Puzzle generator CLI. Not started by `up`; run with:
-  #   docker compose run --rm tools generate -- --weeks 1-13 --reserves 2 --quiet
+  #   docker compose run --rm tools generate --weeks 1-13 --reserves 2 --quiet
   tools:
     build:
       context: .

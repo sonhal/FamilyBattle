@@ -2,15 +2,15 @@
  * Runs one SQL statement against the league database, for hand fixes.
  * The runtime image has no sqlite3 CLI, so use this via the tools container:
  *
- *   docker compose run --rm tools sql -- "SELECT id, week, status FROM puzzles"
- *   docker compose run --rm tools sql -- "UPDATE puzzles SET status = 'voided' WHERE week = 3"
+ *   docker compose run --rm tools sql "SELECT id, week, status FROM puzzles"
+ *   docker compose run --rm tools sql "UPDATE puzzles SET status = 'voided' WHERE week = 3"
  */
 import { config } from '../src/lib/server/config.ts';
 import { openDatabase } from '../src/lib/server/db.ts';
 
 const statement = process.argv.slice(2).join(' ').trim();
 if (!statement) {
-	console.error('Usage: npm run sql -- "<SQL statement>"');
+	console.error('Usage: pnpm sql "<SQL statement>"');
 	process.exit(1);
 }
 
