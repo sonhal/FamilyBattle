@@ -8,38 +8,38 @@
 
 {#if data.state === 'before'}
 	<section class="notice">
-		<h1>The season starts soon</h1>
-		<p>Week 1 opens <LocalTime iso={data.opensAt} />.</p>
+		<h1>Sesongen starter snart</h1>
+		<p>Uke 1 åpner <LocalTime iso={data.opensAt} />.</p>
 	</section>
 {:else if data.state === 'over'}
 	<section class="notice">
-		<h1>The season is over</h1>
-		<p>Thanks for playing!</p>
+		<h1>Sesongen er over</h1>
+		<p>Takk for at du spilte!</p>
 	</section>
 {:else}
 	<div class="meta">
-		<span>Week {data.week} of {data.weeks}</span>
+		<span>Uke {data.week} av {data.weeks}</span>
 		{#if data.state === 'not_started' || data.state === 'playing'}
-			<span>{data.playedCount} of {data.playerCount} played</span>
+			<span>{data.playedCount} av {data.playerCount} har spilt</span>
 		{/if}
 	</div>
 
 	{#if data.state === 'missing'}
 		<section class="notice">
-			<h1>No puzzle yet</h1>
-			<p>This week's puzzle isn't ready. Ping the admin.</p>
+			<h1>Ingen oppgave ennå</h1>
+			<p>Ukens oppgave er ikke klar. Si fra til admin.</p>
 		</section>
 	{:else if data.state === 'review'}
 		<section class="notice">
-			<h1>Week {data.week} is closed for play</h1>
-			<p>Results are being revealed. The next puzzle opens <LocalTime iso={data.nextOpensAt} />.</p>
+			<h1>Uke {data.week} er stengt for spill</h1>
+			<p>Resultatene blir avslørt. Neste oppgave åpner <LocalTime iso={data.nextOpensAt} />.</p>
 		</section>
 	{:else if data.state === 'not_started'}
 		<section class="notice">
-			<h1>Week {data.week}</h1>
-			<p>16 words, 4 hidden groups, 4 mistakes allowed. One attempt.</p>
-			<p>Open until <LocalTime iso={data.closesAt} minusMinute />.</p>
-			<p class="small">Your timer starts when you press Start. It only breaks ties.</p>
+			<h1>Uke {data.week}</h1>
+			<p>16 ord, 4 skjulte grupper, 4 feil tillatt. Ett forsøk.</p>
+			<p>Åpen til <LocalTime iso={data.closesAt} minusMinute />.</p>
+			<p class="small">Tiden starter når du trykker Start. Den brukes bare ved likt resultat.</p>
 			<form method="POST" action="?/start" use:enhance>
 				<button class="primary">Start</button>
 			</form>

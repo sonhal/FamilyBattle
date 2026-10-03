@@ -15,6 +15,7 @@ gameplay, scoring, voting, data model) are not repeated here; this plan covers h
 | Players  | Membership in an Authelia group (`PLAYER_GROUP`, default `familybattle`)                               |
 | Proxy    | Caddy `forward_auth` → Authelia, site `battle.sonhal.no`                                               |
 | Client   | Mobile-first PWA                                                                                       |
+| Language | Norwegian (Bokmål) for everything players see, puzzles included. English for code, config and docs     |
 | Timezone | `Europe/Oslo` for all phase boundaries (Luxon); each player sees deadlines in their own local time     |
 | Puzzles  | A CLI script generates all 13 weeks plus 2 reserves up front with the Claude API, run by the VPS agent |
 | Launch   | Week 1 opens **Sun Oct 4, 00:00 Oslo**, so features ship in stages (see Milestones)                    |

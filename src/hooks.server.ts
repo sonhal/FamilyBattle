@@ -32,7 +32,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const identity = resolveIdentity(headers, config);
 
 	if (!identity.ok) {
-		return new Response(identity.status === 401 ? 'Not signed in.' : 'You are not in the league.', {
+		return new Response(identity.status === 401 ? 'Ikke innlogget.' : 'Du er ikke med i ligaen.', {
 			status: identity.status,
 			headers: { 'content-type': 'text/plain; charset=utf-8' }
 		});

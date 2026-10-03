@@ -17,10 +17,10 @@ const week = Number(process.argv[2] ?? 1);
 
 const sample: Puzzle = {
 	groups: [
-		{ category: 'Fish', color: 'yellow', words: ['Bass', 'Pike', 'Sole', 'Carp'] },
-		{ category: 'Planets', color: 'green', words: ['Mars', 'Venus', 'Earth', 'Saturn'] },
-		{ category: 'Chess pieces', color: 'blue', words: ['King', 'Queen', 'Rook', 'Bishop'] },
-		{ category: '___ball', color: 'purple', words: ['Foot', 'Basket', 'Snow', 'Hand'] }
+		{ category: 'Fisk', color: 'yellow', words: ['Torsk', 'Laks', 'Sei', 'Makrell'] },
+		{ category: 'Planeter', color: 'green', words: ['Mars', 'Venus', 'Jupiter', 'Saturn'] },
+		{ category: 'Sjakkbrikker', color: 'blue', words: ['Konge', 'Dronning', 'Tårn', 'Løper'] },
+		{ category: '___ball', color: 'purple', words: ['Fot', 'Hånd', 'Snø', 'Volley'] }
 	]
 };
 

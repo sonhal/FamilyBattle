@@ -20,6 +20,7 @@ export interface AttemptState {
 	finishedAt: string | null;
 }
 
+// `reason` is shown to players, so it is in Norwegian.
 export type GuessOutcome =
 	| { kind: 'invalid'; reason: string }
 	| { kind: 'already_guessed' }
@@ -63,24 +64,24 @@ export function applyGuess(
 	rawWords: unknown[],
 	now: Date
 ): GuessOutcome {
-	if (state.finishedAt) return { kind: 'invalid', reason: 'This attempt is finished.' };
+	if (state.finishedAt) return { kind: 'invalid', reason: 'Forsøket er ferdig.' };
 	if (state.submissions >= MAX_SUBMISSIONS) {
-		return { kind: 'invalid', reason: 'Too many submissions.' };
+		return { kind: 'invalid', reason: 'For mange innsendinger.' };
 	}
 
 	const words = rawWords.filter((w): w is string => typeof w === 'string');
 	if (words.length !== 4 || rawWords.length !== 4) {
-		return { kind: 'invalid', reason: 'Select exactly four words.' };
+		return { kind: 'invalid', reason: 'Velg nøyaktig fire ord.' };
 	}
 	if (new Set(words.map(normalizeWord)).size !== 4) {
-		return { kind: 'invalid', reason: 'Select four different words.' };
+		return { kind: 'invalid', reason: 'Velg fire forskjellige ord.' };
 	}
 
 	const solved = new Set(solvedGroupIndices(groups, state.guesses));
 	for (const w of words) {
 		const i = groupIndexOf(groups, w);
-		if (i === -1) return { kind: 'invalid', reason: 'Unknown word.' };
-		if (solved.has(i)) return { kind: 'invalid', reason: 'That word is already solved.' };
+		if (i === -1) return { kind: 'invalid', reason: 'Ukjent ord.' };
+		if (solved.has(i)) return { kind: 'invalid', reason: 'Det ordet er allerede løst.' };
 	}
 
 	const key = guessKey(words);

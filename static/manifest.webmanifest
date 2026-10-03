@@ -1,7 +1,8 @@
 {
 	"name": "Family Battle",
 	"short_name": "Family Battle",
-	"description": "Weekly Connections league for the family.",
+	"description": "Ukentlig ordgåte-liga for familien.",
+	"lang": "nb",
 	"start_url": "/",
 	"scope": "/",
 	"display": "standalone",

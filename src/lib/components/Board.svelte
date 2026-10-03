@@ -19,10 +19,10 @@
 	let picked = $derived(selected.filter((w) => board.remaining.includes(w)));
 
 	const feedback: Record<string, string> = {
-		correct: 'Nice!',
-		one_away: 'One away…',
-		wrong: 'Not quite.',
-		already_guessed: 'Already guessed.'
+		correct: 'Riktig!',
+		one_away: 'Én unna …',
+		wrong: 'Ikke helt.',
+		already_guessed: 'Allerede gjettet.'
 	};
 
 	const emoji: Record<Color, string> = {
@@ -60,7 +60,7 @@
 	{/each}
 
 	{#if !board.finished}
-		<div class="grid" role="group" aria-label="Words">
+		<div class="grid" role="group" aria-label="Ord">
 			{#each tiles as word (word)}
 				<button
 					type="button"
@@ -78,24 +78,24 @@
 
 {#if board.finished}
 	<section class="done">
-		<h2>{board.revealed.length === 0 ? 'Solved!' : 'Out of mistakes'}</h2>
+		<h2>{board.revealed.length === 0 ? 'Løst!' : 'Bedre lykke neste uke!'}</h2>
 		{#each board.revealed as g (g.category)}
 			{@render group(g)}
 		{/each}
 		{#if board.grid}
-			<div class="emoji" aria-label="Your guesses">
+			<div class="emoji" aria-label="Dine gjetninger">
 				{#each board.grid as row, i (i)}
 					<div>{row.map((c) => emoji[c]).join('')}</div>
 				{/each}
 			</div>
 		{/if}
 		<p class="muted">
-			Results and standings are revealed when play closes, <LocalTime iso={closesAt} />.
+			Resultater og stilling vises når spillet stenger, <LocalTime iso={closesAt} />.
 		</p>
 	</section>
 {:else}
 	<div class="mistakes">
-		Mistakes left:
+		Feil igjen:
 		{#each { length: 4 } as _, i (i)}
 			<span class="dot" class:used={i >= board.mistakesLeft}></span>
 		{/each}
@@ -121,11 +121,11 @@
 			<input type="hidden" name="word" value={word} />
 		{/each}
 		<div class="actions">
-			<button type="button" onclick={shuffle}>Shuffle</button>
+			<button type="button" onclick={shuffle}>Stokk</button>
 			<button type="button" onclick={() => (selected = [])} disabled={picked.length === 0}>
-				Deselect all
+				Fjern valg
 			</button>
-			<button class="primary" disabled={picked.length !== 4 || submitting}>Submit</button>
+			<button class="primary" disabled={picked.length !== 4 || submitting}>Send inn</button>
 		</div>
 	</form>
 {/if}

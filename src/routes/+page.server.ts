@@ -57,24 +57,24 @@ function openPuzzle() {
 export const actions: Actions = {
 	start: ({ locals }) => {
 		const puzzle = openPuzzle();
-		if (!puzzle) return fail(409, { message: 'This puzzle is not open.' });
+		if (!puzzle) return fail(409, { message: 'Denne oppgaven er ikke åpen.' });
 		repo.startAttempt(puzzle.id, locals.player.id, now());
 	},
 
 	guess: async ({ locals, request }) => {
 		if (!guessLimiter(String(locals.player.id))) {
-			return fail(429, { message: 'Slow down a little.' });
+			return fail(429, { message: 'Rolig litt.' });
 		}
 		const words = (await request.formData()).getAll('word');
 
 		const puzzle = openPuzzle();
-		if (!puzzle) return fail(409, { message: 'This puzzle has closed.' });
+		if (!puzzle) return fail(409, { message: 'Denne oppgaven er stengt.' });
 
 		// better-sqlite3 transactions are synchronous, so two quick taps on
 		// Submit are applied one after the other, never interleaved.
 		const outcome = repo.db.transaction(() => {
 			const attempt = repo.attempt(puzzle.id, locals.player.id);
-			if (!attempt) return { kind: 'invalid' as const, reason: 'Start the puzzle first.' };
+			if (!attempt) return { kind: 'invalid' as const, reason: 'Start oppgaven først.' };
 			const out = applyGuess(puzzle.groups, attempt, words, now());
 			if (out.kind === 'scored') repo.saveAttempt(attempt.id, out.state);
 			if (out.kind === 'already_guessed') repo.bumpSubmissions(attempt.id);

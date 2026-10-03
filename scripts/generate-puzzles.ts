@@ -34,12 +34,12 @@ const { values: args } = parseArgs({
 		force: { type: 'boolean', default: false },
 		'dry-run': { type: 'boolean', default: false },
 		quiet: { type: 'boolean', default: false },
-		language: { type: 'string', default: process.env.PUZZLE_LANGUAGE ?? 'English' },
+		language: { type: 'string', default: process.env.PUZZLE_LANGUAGE ?? 'Norwegian Bokmål' },
 		audience: {
 			type: 'string',
 			default:
 				process.env.PUZZLE_AUDIENCE ??
-				'a family of mixed ages living in Norway. Avoid US-only trivia such as American sports teams, TV shows or store brands.'
+				'a Norwegian family of mixed ages. Cultural references should be Norwegian or widely known in Norway, not American.'
 		}
 	}
 });
@@ -81,10 +81,14 @@ function prompt(history: { words: string[]; categories: string[]; voidNotes: str
 	return `Create one puzzle in the style of the NYT game "Connections" for ${args.audience}
 
 Rules:
-- Exactly 16 ${args.language} words or short phrases (at most ${MAX_WORD_LENGTH} characters each), split into exactly 4 groups of 4.
+- Everything the players see is in ${args.language}: all 16 words and all 4 category names.
+  Use standard spelling (as in Språkrådet's dictionaries), including æ, ø and å where they belong.
+- Exactly 16 words or short phrases (at most ${MAX_WORD_LENGTH} characters each, preferably
+  12 or fewer so they fit on a phone tile), split into exactly 4 groups of 4.
 - Each group has a short category name and a difficulty colour, each colour used once:
   yellow = most straightforward, green = moderate, blue = harder, purple = trickiest
-  (wordplay such as hidden words, homophones, "___ + word" compounds, anagrams).
+  (wordplay such as hidden words, homophones, compound words like "___hus" or "sol___",
+  anagrams). The wordplay must work in ${args.language}, not only in translation.
 - Include deliberate red herrings: several words should look like they belong to another
   group. But every word must fit exactly one group once the categories are known. If a
   word could reasonably belong to two groups, replace it.

@@ -4,6 +4,8 @@ A weekly Connections-style puzzle league for the family: one puzzle per week, pl
 asynchronously Sunday to Wednesday, scored across the season. Built with SvelteKit 3,
 SQLite and the Claude API (for puzzle generation).
 
+Players see Norwegian (Bokmål), puzzles included. Code, config and documentation are in English.
+
 - `docs/PLAN.md`: design and implementation plan
 - `docs/DEPLOY.md`: deployment runbook (Docker, Caddy, Authelia)
 
