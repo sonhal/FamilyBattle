@@ -242,6 +242,9 @@ ones with the same key, and the season tiebreak.
 
 See `docs/DEPLOY.md` for the step-by-step runbook.
 
+CI (`.github/workflows/ci.yml`): lint, type check, unit tests and build on every push/PR, then
+builds the `app` and `tools` images. Pushes to the default branch and `v*` tags publish them to GHCR.
+
 - Multi-stage `Dockerfile`. The `base` stage uses `node:22-bookworm` (it has the compilers
   better-sqlite3 needs) plus a global pnpm. `prod-deps` installs runtime dependencies only. `tools` adds the source for the CLI scripts. `app` is
   `node:22-bookworm-slim` with only `build/` and production `node_modules`, running as `node`.

@@ -33,3 +33,15 @@ ANTHROPIC_API_KEY=... pnpm generate --weeks 1-13 --reserves 2 --quiet
 ```
 
 See `scripts/generate-puzzles.ts` for options (`--replace`, `--dry-run`, `--language`).
+
+## CI
+
+`.github/workflows/ci.yml` runs on every push and pull request:
+
+1. **verify**: `pnpm lint`, `pnpm check`, `pnpm test`, `pnpm build`
+2. **docker**: builds the `app` and `tools` images. Pushes to the default branch and `v*` tags
+   also publish them to `ghcr.io/sonhal/familybattle` and `ghcr.io/sonhal/familybattle-tools`,
+   with provenance and SBOM attestations. Pull requests only build them.
+
+Actions are pinned to commit SHAs. Dependabot (`.github/dependabot.yml`) keeps actions, npm
+packages and base images up to date. Release by pushing a tag such as `v1.0.0`.

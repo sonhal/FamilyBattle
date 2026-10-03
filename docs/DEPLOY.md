@@ -75,11 +75,40 @@ Edit `.env`:
 `networks:` block of the `familybattle` service with `ports: ["127.0.0.1:3000:3000"]`, and use
 `localhost:3000` as the upstream in step 6. Never publish on `0.0.0.0`.
 
-## 4. Build and start the app
+## 4. Get the images and start the app
+
+CI (`.github/workflows/ci.yml`) publishes two images to GitHub Container Registry on every push
+to the default branch and on every `v*` tag:
+
+| Image                               | Contents                             |
+| ----------------------------------- | ------------------------------------ |
+| `ghcr.io/sonhal/familybattle`       | the app                              |
+| `ghcr.io/sonhal/familybattle-tools` | the CLI (generator, `sql`, `backup`) |
+
+Each image is tagged `latest`, `sha-<commit>`, and `X.Y.Z` / `X.Y` for version tags.
+
+**Option A: pull from GHCR (preferred once CI has published).** The packages are private, so
+log in once with a GitHub _classic_ personal access token that has only the `read:packages`
+scope (fine-grained tokens can't read GHCR):
+
+```sh
+echo <token> | docker login ghcr.io -u sonhal --password-stdin
+docker compose pull familybattle
+docker compose --profile tools pull tools
+```
+
+To pin a release, set `FAMILYBATTLE_TAG=1.2.0` (or `sha-abc1234`) in `.env`. The default is `latest`.
+
+**Option B: build on the VPS** (no registry access needed):
 
 ```sh
 docker compose build familybattle
 docker compose --profile tools build tools
+```
+
+Then start it:
+
+```sh
 docker compose up -d familybattle
 docker compose logs familybattle   # expect: Listening on http://0.0.0.0:3000
 ```
@@ -170,13 +199,13 @@ Check the volume name with `docker volume ls`. Compose prefixes it with the proj
 
 ## Day-to-day operations
 
-| Task                                      | Command                                                                                                  |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Update the app                            | `git pull && docker compose build familybattle && docker compose up -d familybattle`                     |
-| Logs                                      | `docker compose logs -f familybattle`                                                                    |
-| Inspect data                              | `docker compose run --rm tools sql "SELECT * FROM players"`                                              |
-| Void week N (until the admin page exists) | `docker compose run --rm tools sql "UPDATE puzzles SET status='voided', void_note='<why>' WHERE week=N"` |
-| Regenerate an unplayed week               | `ANTHROPIC_API_KEY=... docker compose run --rm tools generate --replace N --quiet`                       |
+| Task                                      | Command                                                                                                                                                                  |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Update the app                            | `docker compose pull familybattle && docker compose up -d familybattle` (Option B: `git pull && docker compose build familybattle && docker compose up -d familybattle`) |
+| Logs                                      | `docker compose logs -f familybattle`                                                                                                                                    |
+| Inspect data                              | `docker compose run --rm tools sql "SELECT * FROM players"`                                                                                                              |
+| Void week N (until the admin page exists) | `docker compose run --rm tools sql "UPDATE puzzles SET status='voided', void_note='<why>' WHERE week=N"`                                                                 |
+| Regenerate an unplayed week               | `ANTHROPIC_API_KEY=... docker compose run --rm tools generate --replace N --quiet`                                                                                       |
 
-The tools image is built from the source, so rebuild it after `git pull`:
-`docker compose --profile tools build tools`.
+Update the tools image together with the app: `docker compose --profile tools pull tools`
+(Option B: `docker compose --profile tools build tools` after `git pull`).

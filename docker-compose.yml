@@ -1,4 +1,6 @@
 # Family Battle on the VPS. See docs/DEPLOY.md.
+# Images are published to GHCR by CI (.github/workflows/ci.yml). `docker compose pull`
+# fetches them; `docker compose build` builds the same images from source instead.
 services:
   familybattle:
     build:
@@ -6,7 +8,7 @@ services:
       target: app
       args:
         APP_ORIGIN: https://battle.sonhal.no
-    image: familybattle:latest
+    image: ghcr.io/sonhal/familybattle:${FAMILYBATTLE_TAG:-latest}
     container_name: familybattle
     restart: unless-stopped
     env_file: .env
@@ -24,7 +26,7 @@ services:
     build:
       context: .
       target: tools
-    image: familybattle-tools:latest
+    image: ghcr.io/sonhal/familybattle-tools:${FAMILYBATTLE_TAG:-latest}
     profiles: [tools]
     env_file: .env
     environment:
