@@ -1,0 +1,276 @@
+# Family Connections League: Implementation Plan
+
+Based on the concept doc "Family Connections League: Concept". The concept rules (weekly cycle,
+gameplay, scoring, voting, data model) are not repeated here; this plan covers how to build them.
+
+## Decisions
+
+| Topic | Decision |
+|---|---|
+| Stack | SvelteKit (`@sveltejs/adapter-node`), TypeScript, Vite for dev, Vitest for tests |
+| Deploy | One Docker container on the VPS, behind the existing reverse proxy |
+| Database | SQLite (`better-sqlite3`) on a Docker volume, plain SQL migrations |
+| Auth | Existing forward-auth proxy. The app reads identity from request headers |
+| Admin | Membership in an auth group (from the groups header) |
+| Client | Mobile-first PWA |
+| Timezone | `Europe/Oslo` for all phase boundaries (Luxon); each player sees deadlines in their own local time |
+| Puzzles | A CLI script generates all 13 weeks plus 2 reserves up front with the Claude API |
+| Launch | Week 1 opens **Sun Oct 4, 00:00 Oslo**, so features ship in stages (see Milestones) |
+
+Defaults for the concept doc's remaining open items. Scoring is derived on read, so any of these can
+change later without a data migration:
+
+- Season tiebreaker: most weekly wins, then best single week, then shared.
+- No final-week multiplier and no dropped worst weeks.
+- A voided week shortens the season. A reserve puzzle can be scheduled as a bonus week if the family wants one.
+- No notifications in v1. A WhatsApp message from the admin does the job.
+
+## Season calendar
+
+Week `n` (1–13) opens on `2026-10-04 + 7·(n-1)` days at 00:00 Oslo time.
+
+| Phase | Start | End (exclusive) |
+|---|---|---|
+| open | Sun 00:00 | Thu 00:00 |
+| review | Thu 00:00 | next Sun 00:00 |
+| closed | next Sun 00:00 | — |
+
+- The phase is **computed** from `week` and the current time, never stored. `schedule.ts` exposes
+  `phaseOf(week, now)` and `currentWeek(now)`.
+- DST: Norway leaves summer time on Sun Oct 25 at 03:00. The 00:00 boundaries are unaffected,
+  and Luxon handles the offset.
+- Week 13 opens Dec 27 and its review ends Sun Jan 3. The concept doc says "final week closes Wed
+  Dec 30", which is the end of the *open* phase. Standings are final once week 13's review ends.
+- Testing: a `NOW_OVERRIDE` env var (ignored when `NODE_ENV=production`) lets you check each phase locally.
+
+## Architecture
+
+```
+Browser (PWA) ──► reverse proxy + forward-auth ──► sveltekit container :3000 ──► /data/league.db
+                  sets Remote-User / Remote-Groups   (only reachable via proxy)
+```
+
+```
+src/
+  hooks.server.ts            identity from headers → upsert player → event.locals.player
+  lib/server/env.ts          header names, admin group, DB path, (dev) NOW_OVERRIDE
+  lib/server/db.ts           better-sqlite3 connection, WAL mode, migrations on boot
+  lib/server/schedule.ts     week/phase math (pure, unit-tested)
+  lib/server/game.ts         guess evaluation (pure, unit-tested)
+  lib/server/scoring.ts      weekly ranking, points, season totals (pure, unit-tested)
+  lib/server/shuffle.ts      seeded shuffle (mulberry32 over a hash of playerId:puzzleId)
+  lib/server/puzzle-schema.ts  puzzle validation, shared by the generator and the DB layer
+  lib/server/repo.ts         all SQL in one place
+  routes/
+    +page.server.ts / +page.svelte        this week: board, or "played: 4 of 6" while open
+    week/[n]/+page.server.ts / .svelte    review: answers, weekly ranking, your vote
+    standings/+page.server.ts / .svelte   season table
+    admin/+page.server.ts / .svelte       vote totals, void/unvoid
+scripts/generate-puzzles.ts
+migrations/001_init.sql
+Dockerfile, docker-compose.yml
+static/manifest.webmanifest, icons
+```
+
+All game actions are **SvelteKit form actions** (`?/guess`, `?/vote`, `?/void`), not JSON endpoints.
+The reasons:
+
+- SvelteKit's built-in CSRF Origin check covers form actions.
+- They work without JS and are progressively enhanced with `use:enhance`.
+- All server code lives in `+page.server.ts` and `$lib/server/*`, which SvelteKit refuses to bundle for the client.
+
+## Data model (SQLite)
+
+```sql
+CREATE TABLE players (
+  id           INTEGER PRIMARY KEY,
+  auth_user    TEXT NOT NULL UNIQUE,      -- value of the user header
+  display_name TEXT NOT NULL,
+  created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE puzzles (
+  id         INTEGER PRIMARY KEY,
+  week       INTEGER UNIQUE,              -- 1..13; NULL = reserve
+  groups     TEXT NOT NULL,               -- JSON: [{category, color, words[4]}] x4
+  status     TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','voided')),
+  void_note  TEXT,                        -- why it was voided, fed back into generation
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE attempts (
+  id            INTEGER PRIMARY KEY,
+  puzzle_id     INTEGER NOT NULL REFERENCES puzzles(id),
+  player_id     INTEGER NOT NULL REFERENCES players(id),
+  groups_solved INTEGER NOT NULL DEFAULT 0,
+  mistakes      INTEGER NOT NULL DEFAULT 0,
+  guesses       TEXT NOT NULL DEFAULT '[]', -- JSON: [{words[4], verdict, at}]
+  started_at    TEXT NOT NULL,              -- server time
+  finished_at   TEXT,                       -- set at 4 groups or 4 mistakes
+  UNIQUE (puzzle_id, player_id)
+);
+
+CREATE TABLE puzzle_votes (
+  puzzle_id  INTEGER NOT NULL REFERENCES puzzles(id),
+  player_id  INTEGER NOT NULL REFERENCES players(id),
+  is_bad     INTEGER NOT NULL CHECK (is_bad IN (0,1)),
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (puzzle_id, player_id)
+);
+```
+
+`groups_solved` and `mistakes` are denormalized from `guesses` to keep queries simple. They are
+written in the same transaction, and a `recount` admin script can rebuild them from `guesses` if a
+hand edit gets them out of sync.
+
+## Identity and auth (forward-auth headers)
+
+`hooks.server.ts`:
+
+1. Read the user, display-name and groups headers. The names are configurable, with Authelia-style defaults:
+   `AUTH_USER_HEADER=Remote-User`, `AUTH_NAME_HEADER=Remote-Name`,
+   `AUTH_GROUPS_HEADER=Remote-Groups` (comma-separated), `ADMIN_GROUP=league-admin`.
+2. **Fail closed.** No user header means a 401 and nothing else runs. (Requests for static assets and the manifest are allowed.)
+3. Upsert the player by `auth_user`, refreshing `display_name`. This happens on every request, which is cheap in SQLite.
+4. `locals.player = {id, name, isAdmin}`. `isAdmin` comes from the groups header on each request and is never stored.
+5. Optional `ALLOWED_USERS` / `PLAYER_GROUP` restricts which accounts can play, so other VPS users don't
+   show up as league players.
+
+**Security: header trust is the whole model.** Anyone who can reach the container directly can send
+`Remote-User: sondre` and become you. So:
+
+- Don't publish the container port. Attach the container only to the proxy's Docker network
+  (or bind `127.0.0.1:3000` if the proxy runs on the host).
+- Check that the proxy **overwrites** client-supplied `Remote-*` headers. Authelia with Traefik or
+  Caddy `forward_auth` copies the auth response headers over the request headers, which handles this.
+  Confirm it with `curl -H 'Remote-User: someone-else'` through the proxy while logged in as yourself.
+- Defense in depth (optional): the proxy adds `X-Proxy-Secret: <random>` and the app rejects requests
+  without it.
+
+## Gameplay (server)
+
+**Start attempt.** When `+page.server.ts` loads during the open phase, it inserts the attempt with
+`INSERT ... ON CONFLICT DO NOTHING`, setting `started_at` to the server time. This means:
+
+- Opening the board starts your clock.
+- An attempt that is started but unfinished still counts as played. It ranks on its current groups and mistakes, with no time.
+
+**Data sent to the client** (never the `groups` JSON):
+
+- solved groups so far: `{category, color, words}`
+- remaining words in seeded-shuffle order
+- the verdict history: `mistakesLeft` and the previous guesses
+- `closesAt` (ISO, so the client shows it in local time)
+
+**`?/guess` action.** Everything below runs in one `db.transaction`. better-sqlite3 is synchronous, so
+double-taps are serialized for free.
+
+1. Phase must be `open`, the attempt must exist and be unfinished, and the guess must be exactly 4 distinct words, all among the remaining words.
+2. Normalize the guess into a sorted lowercase key. If that key is already in `guesses`, return `already_guessed` with no cost.
+3. Evaluate it with `game.evaluate(groups, words)`: `correct`, `one_away` (3 in one group), or `wrong`.
+4. Append to `guesses` and update the counters. Set `finished_at` when solved reaches 4 or mistakes reaches 4.
+5. Cap the attempt at 60 total submissions (repeats included), plus a simple in-memory limit of
+   ~2 per second per player.
+
+When an attempt ends with 4 mistakes, the player's own board shows the unsolved groups. (The answers
+are now out *to them*, and they can't change their result.) Everyone else's results stay hidden until review.
+
+## Scoring (pure functions, derived on read)
+
+```ts
+rankWeek(attempts) -> [{playerId, place, points}]
+  sort key: groups_solved DESC, mistakes ASC, solveMs ASC (null = slowest)
+  identical keys share a place; points = average of the POINTS[] slots they occupy
+  POINTS = [10, 7, 5, 4, 3, 2, 1]   // 8th+ (not expected) gets 1
+season(weeks) -> [{playerId, total, wins, bestWeek, perWeek[]}]
+  includes only weeks where puzzle.status='active' AND phase != 'open'
+```
+
+**Leak to watch for:** standings must exclude the week that is still open. Otherwise totals that move
+mid-week reveal who has played and how well.
+
+Unit tests cover: the tie-averaging examples from the concept doc (two tied for 1st get 8.5 each, the
+next player is 3rd), missed week = 0, voided weeks excluded, an unfinished attempt ranked below finished
+ones with the same key, and the season tiebreak.
+
+## Review, voting, voiding
+
+- `/week/[n]` (phase `review` or `closed`) shows all four groups and the weekly ranking with each
+  player's guess grid (the coloured squares).
+- `?/vote` is allowed only when the player has an attempt and the phase is `review`. It upserts the vote.
+  The page shows only *your* vote, never tallies.
+- `/admin` (`isAdmin` only, enforced in the `load` and in every action):
+  - per week: `n of m voted bad`
+  - void/unvoid toggle plus a `void_note`
+  - **no puzzle contents for future weeks**, to make the honor system easier to keep
+
+## Puzzle generation script
+
+`npm run generate -- --weeks 1-13 --reserves 2 [--replace 5]`
+
+- Calls the Claude API (`@anthropic-ai/sdk`, model `claude-opus-5-5`) **one puzzle at a time**. Each
+  call passes all previously generated words and categories, plus any `void_note`s, so the season
+  doesn't repeat itself.
+- Uses structured output (a JSON schema for `{groups:[{category, color, words[4]}]}`). The output is
+  still treated as untrusted: strip code fences, then `JSON.parse`, then `puzzle-schema.validate()`
+  (16 unique case-insensitive words, 4×4, colours yellow/green/blue/purple each used once, no overlap
+  with earlier weeks).
+- Retries up to 3 times per puzzle, feeding the validation error back to the model.
+- Inserts in a transaction. `--dry-run` prints the puzzles without inserting them.
+- `ANTHROPIC_API_KEY` exists only in the environment where the script runs. It never goes in the image or the repo.
+- Honor-system note: whoever runs the script can see the answers in the terminal. Use `--quiet` to
+  print only validation status. If someone else in the family is willing to run it, even better.
+
+## Client / PWA
+
+- Mobile-first 4×4 grid, with tap to select up to 4 and Submit / Shuffle / Deselect buttons. Shuffle is
+  client-side and cosmetic (it reorders the remaining words locally).
+- Colours: yellow, green, blue, purple, all with WCAG-contrast text.
+- Your local deadline ("closes Wed 23:59 your time") via `Intl.DateTimeFormat`.
+- `manifest.webmanifest`, icons, `theme-color`. The service worker caches only static assets.
+  Game pages are always fetched from the network, so no stale boards and no cached answers.
+- Svelte escapes text by default, and model-generated text is **never** rendered with `{@html}`.
+
+## Deployment
+
+- Multi-stage `Dockerfile`: `node:22-alpine` build stage (`npm ci && npm run build`), then a slim
+  runtime with `build/`, production `node_modules` (better-sqlite3 needs its native build, so build
+  in the same base image), and `migrations/`.
+- `docker-compose.yml`: volume `league-data:/data`, `DATABASE_PATH=/data/league.db`,
+  `ORIGIN=https://<your-domain>` (adapter-node needs it for the CSRF check), the auth header env vars,
+  the proxy network, and no published ports.
+- Migrations run on boot.
+- Backups: nightly host cron runs `docker exec ... sqlite3 /data/league.db ".backup /data/backup-$(date +%F).db"`.
+  This matters because the DB holds the whole season.
+- Hand fixes: `docker exec -it league sqlite3 /data/league.db`.
+
+## Milestones (rush plan)
+
+**M0, tonight (Sat Oct 3) → playable by Sun morning**
+1. Scaffold SvelteKit + adapter-node + Vitest. Add migrations, `db.ts` and `hooks.server.ts` with headers.
+2. Write `schedule.ts`, `game.ts`, `shuffle.ts` and `puzzle-schema.ts`, with unit tests.
+3. Write the generator script. Generate weeks 1–13 plus 2 reserves into the prod DB (or locally, then copy the DB in).
+4. Build the play page (board, guess action, finished state) and the "N of M have played" counter.
+5. Dockerfile + compose, then deploy and run the header-spoof check through the proxy.
+6. Smoke test with two accounts.
+
+**M1, by Wed Oct 7 (review opens Thu 00:00)**
+- `scoring.ts` with tests, plus the `/week/[n]` review page, `/standings` and voting.
+
+**M2, by Sat Oct 10 (before week 2 opens)**
+- `/admin` with vote totals and void toggle, the PWA manifest and icons, and backup cron.
+
+**Later (optional)**
+- Adversarial "does any word fit two groups?" check in the generator, Sunday reminder / "results are in"
+  notifications, and a reserve week as a bonus.
+
+## Risks
+
+| Risk | Mitigation |
+|---|---|
+| M0 slips past Sunday morning | Players have until Wed 23:59. A Sunday-afternoon launch costs nothing in game terms |
+| Header spoofing | No published port, verified proxy header overwrite, optional proxy secret |
+| Ambiguous puzzle | Vote + void. The generator gets the `void_note` |
+| Answers leak via client payload | Groups loaded only in `$lib/server`, and the page data shape is unit-tested to contain no `groups` |
+| Standings leak mid-week | Season query excludes the open week (tested) |
+| Data loss | Volume + nightly `.backup` |
