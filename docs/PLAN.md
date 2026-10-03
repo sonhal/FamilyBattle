@@ -5,17 +5,20 @@ gameplay, scoring, voting, data model) are not repeated here; this plan covers h
 
 ## Decisions
 
-| Topic | Decision |
-|---|---|
-| Stack | SvelteKit (`@sveltejs/adapter-node`), TypeScript, Vite for dev, Vitest for tests |
-| Deploy | One Docker container on the VPS, behind the existing reverse proxy |
-| Database | SQLite (`better-sqlite3`) on a Docker volume, plain SQL migrations |
-| Auth | Existing forward-auth proxy. The app reads identity from request headers |
-| Admin | Membership in an auth group (from the groups header) |
-| Client | Mobile-first PWA |
-| Timezone | `Europe/Oslo` for all phase boundaries (Luxon); each player sees deadlines in their own local time |
-| Puzzles | A CLI script generates all 13 weeks plus 2 reserves up front with the Claude API |
-| Launch | Week 1 opens **Sun Oct 4, 00:00 Oslo**, so features ship in stages (see Milestones) |
+| Topic    | Decision                                                                                               |
+| -------- | ------------------------------------------------------------------------------------------------------ |
+| Stack    | SvelteKit (`@sveltejs/adapter-node`), TypeScript, Vite for dev, Vitest for tests                       |
+| Deploy   | One Docker container on the VPS, behind the existing reverse proxy                                     |
+| Database | SQLite (`better-sqlite3`) on a Docker volume, migrations embedded in `db.ts`                           |
+| Auth     | Existing forward-auth proxy. The app reads identity from request headers                               |
+| Admin    | Membership in an Authelia group (`ADMIN_GROUP`, default `familybattle-admin`)                          |
+| Players  | Membership in an Authelia group (`PLAYER_GROUP`, default `familybattle`)                               |
+| Proxy    | Caddy `forward_auth` → Authelia, site `battle.sonhal.no`                                               |
+| Client   | Mobile-first PWA                                                                                       |
+| Language | Norwegian (Bokmål) for everything players see, puzzles included. English for code, config and docs     |
+| Timezone | `Europe/Oslo` for all phase boundaries (Luxon); each player sees deadlines in their own local time     |
+| Puzzles  | A CLI script generates all 13 weeks plus 2 reserves up front with the Claude API, run by the VPS agent |
+| Launch   | Week 1 opens **Sun Oct 4, 00:00 Oslo**, so features ship in stages (see Milestones)                    |
 
 Defaults for the concept doc's remaining open items. Scoring is derived on read, so any of these can
 change later without a data migration:
@@ -29,18 +32,18 @@ change later without a data migration:
 
 Week `n` (1–13) opens on `2026-10-04 + 7·(n-1)` days at 00:00 Oslo time.
 
-| Phase | Start | End (exclusive) |
-|---|---|---|
-| open | Sun 00:00 | Thu 00:00 |
-| review | Thu 00:00 | next Sun 00:00 |
-| closed | next Sun 00:00 | — |
+| Phase  | Start          | End (exclusive) |
+| ------ | -------------- | --------------- |
+| open   | Sun 00:00      | Thu 00:00       |
+| review | Thu 00:00      | next Sun 00:00  |
+| closed | next Sun 00:00 | —               |
 
 - The phase is **computed** from `week` and the current time, never stored. `schedule.ts` exposes
   `phaseOf(week, now)` and `currentWeek(now)`.
 - DST: Norway leaves summer time on Sun Oct 25 at 03:00. The 00:00 boundaries are unaffected,
   and Luxon handles the offset.
 - Week 13 opens Dec 27 and its review ends Sun Jan 3. The concept doc says "final week closes Wed
-  Dec 30", which is the end of the *open* phase. Standings are final once week 13's review ends.
+  Dec 30", which is the end of the _open_ phase. Standings are final once week 13's review ends.
 - Testing: a `NOW_OVERRIDE` env var (ignored when `NODE_ENV=production`) lets you check each phase locally.
 
 ## Architecture
@@ -53,22 +56,26 @@ Browser (PWA) ──► reverse proxy + forward-auth ──► sveltekit contain
 ```
 src/
   hooks.server.ts            identity from headers → upsert player → event.locals.player
-  lib/server/env.ts          header names, admin group, DB path, (dev) NOW_OVERRIDE
-  lib/server/db.ts           better-sqlite3 connection, WAL mode, migrations on boot
+  lib/server/config.ts       header names, groups, DB path, season, (dev) NOW_OVERRIDE
+  lib/server/auth.ts         header → identity, fail closed (pure, unit-tested)
+  lib/server/db.ts           better-sqlite3 connection, WAL mode, embedded migrations on boot
   lib/server/schedule.ts     week/phase math (pure, unit-tested)
   lib/server/game.ts         guess evaluation (pure, unit-tested)
   lib/server/scoring.ts      weekly ranking, points, season totals (pure, unit-tested)
   lib/server/shuffle.ts      seeded shuffle (mulberry32 over a hash of playerId:puzzleId)
   lib/server/puzzle-schema.ts  puzzle validation, shared by the generator and the DB layer
   lib/server/repo.ts         all SQL in one place
+  lib/server/views.ts        the only place client page data for the board is built (tested for leaks)
   routes/
     +page.server.ts / +page.svelte        this week: board, or "played: 4 of 6" while open
     week/[n]/+page.server.ts / .svelte    review: answers, weekly ranking, your vote
     standings/+page.server.ts / .svelte   season table
     admin/+page.server.ts / .svelte       vote totals, void/unvoid
-scripts/generate-puzzles.ts
-migrations/001_init.sql
-Dockerfile, docker-compose.yml
+scripts/generate-puzzles.ts  puzzle generator (Claude API)
+scripts/sql.ts, backup.ts    hand fixes and backups (the image has no sqlite3 CLI)
+scripts/seed-sample.ts       fixed sample puzzle for local dev
+Dockerfile                   stages: base → deps → tools (CLI) / build; prod-deps + build → app
+docker-compose.yml           app service + `tools` profile sharing the data volume
 static/manifest.webmanifest, icons
 ```
 
@@ -127,7 +134,7 @@ hand edit gets them out of sync.
 
 `hooks.server.ts`:
 
-1. Read the user, display-name and groups headers. The names are configurable, with Authelia-style defaults:
+1. Read the user, display-name and groups headers (Authelia). The names are configurable, with these defaults:
    `AUTH_USER_HEADER=Remote-User`, `AUTH_NAME_HEADER=Remote-Name`,
    `AUTH_GROUPS_HEADER=Remote-Groups` (comma-separated), `ADMIN_GROUP=league-admin`.
 2. **Fail closed.** No user header means a 401 and nothing else runs. (Requests for static assets and the manifest are allowed.)
@@ -173,7 +180,7 @@ double-taps are serialized for free.
    ~2 per second per player.
 
 When an attempt ends with 4 mistakes, the player's own board shows the unsolved groups. (The answers
-are now out *to them*, and they can't change their result.) Everyone else's results stay hidden until review.
+are now out _to them_, and they can't change their result.) Everyone else's results stay hidden until review.
 
 ## Scoring (pure functions, derived on read)
 
@@ -198,7 +205,7 @@ ones with the same key, and the season tiebreak.
 - `/week/[n]` (phase `review` or `closed`) shows all four groups and the weekly ranking with each
   player's guess grid (the coloured squares).
 - `?/vote` is allowed only when the player has an attempt and the phase is `review`. It upserts the vote.
-  The page shows only *your* vote, never tallies.
+  The page shows only _your_ vote, never tallies.
 - `/admin` (`isAdmin` only, enforced in the `load` and in every action):
   - per week: `n of m voted bad`
   - void/unvoid toggle plus a `void_note`
@@ -206,7 +213,7 @@ ones with the same key, and the season tiebreak.
 
 ## Puzzle generation script
 
-`npm run generate -- --weeks 1-13 --reserves 2 [--replace 5]`
+`pnpm generate --weeks 1-13 --reserves 2 [--replace 5]`
 
 - Calls the Claude API (`@anthropic-ai/sdk`, model `claude-opus-5-5`) **one puzzle at a time**. Each
   call passes all previously generated words and categories, plus any `void_note`s, so the season
@@ -233,20 +240,39 @@ ones with the same key, and the season tiebreak.
 
 ## Deployment
 
-- Multi-stage `Dockerfile`: `node:22-alpine` build stage (`npm ci && npm run build`), then a slim
-  runtime with `build/`, production `node_modules` (better-sqlite3 needs its native build, so build
-  in the same base image), and `migrations/`.
-- `docker-compose.yml`: volume `league-data:/data`, `DATABASE_PATH=/data/league.db`,
-  `ORIGIN=https://<your-domain>` (adapter-node needs it for the CSRF check), the auth header env vars,
-  the proxy network, and no published ports.
+See `docs/DEPLOY.md` for the step-by-step runbook.
+
+CI (`.github/workflows/ci.yml`): lint, type check, unit tests and build on every push/PR, then
+builds the `app` and `tools` images. Pushes to the default branch and `v*` tags publish them to GHCR.
+
+- Multi-stage `Dockerfile`. The `base` stage uses `node:22-bookworm` (it has the compilers
+  better-sqlite3 needs) plus a global pnpm. `prod-deps` installs runtime dependencies only. `tools` adds the source for the CLI scripts. `app` is
+  `node:22-bookworm-slim` with only `build/` and production `node_modules`, running as `node`.
+- `docker-compose.yml`: a named volume at `/data`, the auth/group env vars from `.env`, the Caddy
+  network, and no published ports.
 - Migrations run on boot.
-- Backups: nightly host cron runs `docker exec ... sqlite3 /data/league.db ".backup /data/backup-$(date +%F).db"`.
-  This matters because the DB holds the whole season.
-- Hand fixes: `docker exec -it league sqlite3 /data/league.db`.
+- Backups: a nightly host cron job runs `docker compose run --rm tools backup` (better-sqlite3's online
+  backup, safe while the app runs) and copies the file off the volume. This matters because the
+  DB holds the whole season.
+- Hand fixes: `docker compose run --rm tools sql "UPDATE ..."`.
+
+## Implementation notes (SvelteKit 3)
+
+- The config lives in `vite.config.ts` (`sveltekit({ adapter, paths })`); there is no `svelte.config.js`.
+- `$lib` is replaced by Node subpath imports: `#lib/server/game.ts` (with the `.ts` extension).
+- `$app/env` replaces `$app/environment`; the `Handle` type comes from `@sveltejs/kit/hooks`.
+- adapter-node no longer reads an `ORIGIN` env var. The public origin is `paths.origin`, set at
+  build time from the `APP_ORIGIN` Docker build arg. SvelteKit's CSRF check compares against it.
+- Package manager: pnpm (pinned via `packageManager`). `pnpm-workspace.yaml` allows the build
+  scripts of better-sqlite3 and esbuild, which pnpm blocks by default.
 
 ## Milestones (rush plan)
 
+Status: **M0 done** (play flow, generator, Docker, runbook in `docs/DEPLOY.md`).
+Note: week 1 opened Sun Oct 4 00:00 Oslo time, which was 22:00 UTC on Oct 3.
+
 **M0, tonight (Sat Oct 3) → playable by Sun morning**
+
 1. Scaffold SvelteKit + adapter-node + Vitest. Add migrations, `db.ts` and `hooks.server.ts` with headers.
 2. Write `schedule.ts`, `game.ts`, `shuffle.ts` and `puzzle-schema.ts`, with unit tests.
 3. Write the generator script. Generate weeks 1–13 plus 2 reserves into the prod DB (or locally, then copy the DB in).
@@ -255,22 +281,25 @@ ones with the same key, and the season tiebreak.
 6. Smoke test with two accounts.
 
 **M1, by Wed Oct 7 (review opens Thu 00:00)**
+
 - `scoring.ts` with tests, plus the `/week/[n]` review page, `/standings` and voting.
 
 **M2, by Sat Oct 10 (before week 2 opens)**
+
 - `/admin` with vote totals and void toggle, the PWA manifest and icons, and backup cron.
 
 **Later (optional)**
+
 - Adversarial "does any word fit two groups?" check in the generator, Sunday reminder / "results are in"
   notifications, and a reserve week as a bonus.
 
 ## Risks
 
-| Risk | Mitigation |
-|---|---|
-| M0 slips past Sunday morning | Players have until Wed 23:59. A Sunday-afternoon launch costs nothing in game terms |
-| Header spoofing | No published port, verified proxy header overwrite, optional proxy secret |
-| Ambiguous puzzle | Vote + void. The generator gets the `void_note` |
+| Risk                            | Mitigation                                                                                         |
+| ------------------------------- | -------------------------------------------------------------------------------------------------- |
+| M0 slips past Sunday morning    | Players have until Wed 23:59. A Sunday-afternoon launch costs nothing in game terms                |
+| Header spoofing                 | No published port, verified proxy header overwrite, optional proxy secret                          |
+| Ambiguous puzzle                | Vote + void. The generator gets the `void_note`                                                    |
 | Answers leak via client payload | Groups loaded only in `$lib/server`, and the page data shape is unit-tested to contain no `groups` |
-| Standings leak mid-week | Season query excludes the open week (tested) |
-| Data loss | Volume + nightly `.backup` |
+| Standings leak mid-week         | Season query excludes the open week (tested)                                                       |
+| Data loss                       | Volume + nightly `.backup`                                                                         |

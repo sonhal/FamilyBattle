@@ -1,0 +1,5 @@
+# pnpm blocks dependency build scripts by default; these two need theirs
+# (better-sqlite3 compiles its native module, esbuild fetches its binary).
+onlyBuiltDependencies:
+  - better-sqlite3
+  - esbuild

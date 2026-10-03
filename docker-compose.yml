@@ -1,0 +1,44 @@
+# Family Battle on the VPS. See docs/DEPLOY.md.
+# Images are published to GHCR by CI (.github/workflows/ci.yml). `docker compose pull`
+# fetches them; `docker compose build` builds the same images from source instead.
+services:
+  familybattle:
+    build:
+      context: .
+      target: app
+      args:
+        APP_ORIGIN: https://battle.sonhal.no
+    image: ghcr.io/sonhal/familybattle:${FAMILYBATTLE_TAG:-latest}
+    container_name: familybattle
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - familybattle-data:/data
+    # No published ports: the app trusts the Remote-* headers, so it must only
+    # be reachable through Caddy. If Caddy runs on the host instead of in
+    # Docker, replace `networks` with:  ports: ["127.0.0.1:3000:3000"]
+    networks:
+      - proxy
+
+  # Puzzle generator CLI. Not started by `up`; run with:
+  #   docker compose run --rm tools generate --weeks 1-13 --reserves 2 --quiet
+  tools:
+    build:
+      context: .
+      target: tools
+    image: ghcr.io/sonhal/familybattle-tools:${FAMILYBATTLE_TAG:-latest}
+    profiles: [tools]
+    env_file: .env
+    environment:
+      - ANTHROPIC_API_KEY
+    volumes:
+      - familybattle-data:/data
+    network_mode: bridge
+
+volumes:
+  familybattle-data:
+
+networks:
+  proxy:
+    external: true
+    name: ${PROXY_NETWORK:-caddy}
