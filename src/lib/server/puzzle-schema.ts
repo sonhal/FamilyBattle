@@ -3,7 +3,8 @@ import { z } from 'zod';
 export const COLORS = ['yellow', 'green', 'blue', 'purple'] as const;
 export type Color = (typeof COLORS)[number];
 
-export const MAX_WORD_LENGTH = 18;
+// 12 fits on one line of a 4-column tile on a 360px phone (see fit-text.ts).
+export const MAX_WORD_LENGTH = 12;
 
 // Shape only. The structural rules (4x4, uniqueness, one group per colour)
 // are checked in validatePuzzle so error messages can be fed back to the model.

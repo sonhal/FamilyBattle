@@ -8,7 +8,12 @@
  * Idempotent: weeks that already have a puzzle are skipped, so a failed run
  * can simply be repeated. Needs ANTHROPIC_API_KEY in the environment.
  *
- * Whoever runs this can see the answers. Pass --quiet to print only status.
+ * Each puzzle that passes validation gets an independent review (a separate
+ * Claude call that only sees the finished groups and flags words that could
+ * belong to another group). Flagged puzzles are sent back for another try.
+ *
+ * Whoever runs this can see the answers. Pass --quiet to print only status;
+ * rejection reasons are hidden too, since they quote puzzle words.
  */
 import Anthropic from '@anthropic-ai/sdk';
 import { parseArgs } from 'node:util';
@@ -22,9 +27,15 @@ import {
 	type Puzzle
 } from '../src/lib/server/puzzle-schema.ts';
 import { createRepo } from '../src/lib/server/repo.ts';
+import {
+	REVIEW_OUTPUT_SCHEMA,
+	reviewFeedback,
+	reviewPrompt,
+	ReviewSchema
+} from '../src/lib/server/puzzle-review.ts';
 
 const MODEL = 'claude-opus-5-5';
-const MAX_TRIES = 3;
+const MAX_TRIES = 4;
 
 const { values: args } = parseArgs({
 	options: {
@@ -83,8 +94,8 @@ function prompt(history: { words: string[]; categories: string[]; voidNotes: str
 Rules:
 - Everything the players see is in ${args.language}: all 16 words and all 4 category names.
   Use standard spelling (as in Språkrådet's dictionaries), including æ, ø and å where they belong.
-- Exactly 16 words or short phrases (at most ${MAX_WORD_LENGTH} characters each, preferably
-  12 or fewer so they fit on a phone tile), split into exactly 4 groups of 4.
+- Exactly 16 words or short phrases of at most ${MAX_WORD_LENGTH} characters each (they must fit
+  on a phone tile, so avoid long compound words), split into exactly 4 groups of 4.
 - Each group has a short category name and a difficulty colour, each colour used once:
   yellow = most straightforward, green = moderate, blue = harder, purple = trickiest
   (wordplay such as hidden words, homophones, compound words like "___hus" or "sol___",
@@ -115,6 +126,49 @@ function extractJson(text: string): unknown {
 	return JSON.parse(stripped);
 }
 
+/** Text of a response, or an error for refusals and truncated output. */
+function responseText(response: Anthropic.Beta.BetaMessage): string {
+	if (response.stop_reason === 'refusal') {
+		throw new Error(`model declined: ${JSON.stringify(response.stop_details)}`);
+	}
+	if (response.stop_reason === 'max_tokens') throw new Error('response was cut off');
+	return response.content
+		.filter((b) => b.type === 'text')
+		.map((b) => b.text)
+		.join('');
+}
+
+/**
+ * Independent second pass: a fresh conversation that only sees the finished
+ * puzzle and reports words that could belong to another group.
+ */
+async function reviewOne(client: Anthropic, puzzle: Puzzle): Promise<string[]> {
+	const response = await client.beta.messages
+		.stream({
+			model: MODEL,
+			max_tokens: 64000,
+			thinking: { type: 'adaptive' },
+			output_config: {
+				effort: 'high',
+				format: { type: 'json_schema', schema: REVIEW_OUTPUT_SCHEMA }
+			},
+			betas: ['server-side-fallback-2026-07-01'],
+			fallbacks: 'default',
+			messages: [{ role: 'user', content: reviewPrompt(puzzle, args.language!) }]
+		})
+		.finalMessage();
+	return reviewFeedback(ReviewSchema.parse(extractJson(responseText(response))));
+}
+
+/** Prints problems, or only their count in --quiet mode (they contain puzzle words). */
+function report(attempt: number, problems: string[]) {
+	console.error(
+		args.quiet
+			? `  try ${attempt} rejected (${problems.length} problem(s), hidden by --quiet)`
+			: `  try ${attempt} rejected: ${problems.join('; ')}`
+	);
+}
+
 async function generateOne(
 	client: Anthropic,
 	history: { words: string[]; categories: string[]; voidNotes: string[] }
@@ -142,25 +196,23 @@ async function generateOne(
 			throw new Error(`model declined: ${JSON.stringify(response.stop_details)}`);
 		}
 
-		const text = response.content
-			.filter((b) => b.type === 'text')
-			.map((b) => b.text)
-			.join('');
-
 		// Model output is untrusted input: parse strictly, then validate.
 		let problems: string[];
 		let puzzle: Puzzle | null = null;
 		try {
-			if (response.stop_reason === 'max_tokens') throw new Error('response was cut off');
-			puzzle = cleanPuzzle(PuzzleSchema.parse(extractJson(text)));
+			puzzle = cleanPuzzle(PuzzleSchema.parse(extractJson(responseText(response))));
 			problems = validatePuzzle(puzzle, history);
 		} catch (err) {
 			problems = [`could not parse the JSON: ${(err as Error).message}`];
 		}
 
-		if (puzzle && problems.length === 0) return puzzle;
+		// Only a structurally valid puzzle is worth the second-pass review.
+		if (puzzle && problems.length === 0) {
+			problems = await reviewOne(client, puzzle);
+			if (problems.length === 0) return puzzle;
+		}
 
-		console.error(`  try ${attempt} rejected: ${problems.join('; ')}`);
+		report(attempt, problems);
 		messages.push(
 			{ role: 'assistant', content: response.content },
 			{
