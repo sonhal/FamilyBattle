@@ -163,17 +163,9 @@ export function createRepo(db: Database.Database) {
 			).n;
 		},
 
-		/** Distinct players with an attempt on any puzzle up to and including `week`. */
-		countSeasonPlayers(week: number): number {
-			return (
-				db
-					.prepare(
-						`SELECT COUNT(DISTINCT a.player_id) AS n
-						 FROM attempts a JOIN puzzles p ON p.id = a.puzzle_id
-						 WHERE p.week IS NOT NULL AND p.week <= ?`
-					)
-					.get(week) as { n: number }
-			).n;
+		/** Everyone in the league: a row exists once someone has passed the group check. */
+		countPlayers(): number {
+			return (db.prepare('SELECT COUNT(*) AS n FROM players').get() as { n: number }).n;
 		},
 
 		vote(puzzleId: number, playerId: number): boolean | null {

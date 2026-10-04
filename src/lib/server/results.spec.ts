@@ -65,12 +65,11 @@ describe('standingsAt', () => {
 	});
 });
 
-describe('countSeasonPlayers', () => {
-	it('counts only players with an attempt up to the given week', () => {
-		const { repo } = setup();
-		expect(repo.countSeasonPlayers(1)).toBe(2); // the lurker never played
-		expect(repo.countSeasonPlayers(2)).toBe(2);
-		expect(repo.players()).toHaveLength(3);
+describe('countPlayers', () => {
+	it('counts every player, including those who have not started yet', () => {
+		const { repo, w1 } = setup();
+		expect(repo.countAttempts(w1)).toBe(2);
+		expect(repo.countPlayers()).toBe(3); // the lurker counts too
 	});
 });
 

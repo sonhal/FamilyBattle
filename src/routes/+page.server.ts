@@ -33,8 +33,8 @@ export const load: PageServerLoad = ({ locals }) => {
 	if (phase !== 'open') return { ...base, state: 'review' as const };
 
 	const playedCount = repo.countAttempts(puzzle.id);
-	// Everyone who has played this season, so lurkers and a non-playing admin don't count.
-	const playerCount = repo.countSeasonPlayers(week);
+	// Everyone who has logged in, so players who haven't started yet show as missing.
+	const playerCount = repo.countPlayers();
 	const attempt = repo.attempt(puzzle.id, locals.player.id);
 	if (!attempt) return { ...base, state: 'not_started' as const, playedCount, playerCount };
 
