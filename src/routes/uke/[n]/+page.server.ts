@@ -2,14 +2,19 @@ import { error, fail } from '@sveltejs/kit';
 import { repo, season } from '#lib/server/index.ts';
 import { now } from '#lib/server/config.ts';
 import { guessGrid } from '#lib/server/game.ts';
-import { solveMs, weekResults } from '#lib/server/results.ts';
-import { closesAt, phaseOf } from '#lib/server/schedule.ts';
+import { liveWeek, solveMs, weekResults } from '#lib/server/results.ts';
+import { closesAt, phaseOf, reviewStartsAt } from '#lib/server/schedule.ts';
 import { rankWeek } from '#lib/server/scoring.ts';
 import type { Actions, PageServerLoad } from './$types';
 
-function revealedPuzzle(param: string) {
+function parseWeek(param: string) {
 	const week = Number(param);
 	if (!Number.isInteger(week) || week < 1 || week > season.weeks) error(404, 'Ukjent uke.');
+	return week;
+}
+
+function revealedPuzzle(param: string) {
+	const week = parseWeek(param);
 	const phase = phaseOf(season, week, now());
 	// Answers stay hidden until play has closed for everyone.
 	if (phase === 'upcoming' || phase === 'open') error(404, 'Resultatene er ikke klare ennå.');
@@ -18,7 +23,52 @@ function revealedPuzzle(param: string) {
 	return { week, phase, puzzle };
 }
 
+/**
+ * While a week is open, a player who has finished it sees a provisional
+ * ranking of everyone else who has finished. No answers, no votes, and
+ * unfinished attempts appear only as "playing", without their progress.
+ */
+function liveResults(week: number, playerId: number) {
+	const live = liveWeek(repo, season, now(), playerId);
+	if (live?.week !== week) error(404, 'Fullfør ukens oppgave for å se resultatene så langt.');
+	const { puzzle } = live;
+	const names = new Map(repo.players().map((p) => [p.id, p.displayName]));
+	const attempts = repo.attemptsForPuzzle(puzzle.id);
+	const byPlayer = new Map(attempts.map((a) => [a.playerId, a]));
+
+	const ranking = rankWeek(weekResults(repo, puzzle.id, { finishedOnly: true })).map((p) => {
+		const a = byPlayer.get(p.playerId)!;
+		return {
+			name: names.get(p.playerId) ?? '?',
+			isMe: p.playerId === playerId,
+			place: p.place,
+			points: p.points,
+			groupsSolved: p.groupsSolved,
+			mistakes: p.mistakes,
+			solveMs: solveMs(a),
+			grid: guessGrid(puzzle.groups, a.guesses)
+		};
+	});
+	const playing = attempts
+		.filter((a) => a.finishedAt === null)
+		.map((a) => names.get(a.playerId) ?? '?')
+		.sort((a, b) => a.localeCompare(b, 'nb'));
+
+	return {
+		live: true as const,
+		week,
+		weeks: season.weeks,
+		voided: puzzle.status === 'voided',
+		ranking,
+		playing,
+		revealsAt: reviewStartsAt(season, week).toISO()!
+	};
+}
+
 export const load: PageServerLoad = ({ params, locals }) => {
+	const n = parseWeek(params.n);
+	if (phaseOf(season, n, now()) === 'open') return liveResults(n, locals.player.id);
+
 	const { week, phase, puzzle } = revealedPuzzle(params.n);
 	const names = new Map(repo.players().map((p) => [p.id, p.displayName]));
 	const attempts = new Map(repo.attemptsForPuzzle(puzzle.id).map((a) => [a.playerId, a]));
@@ -39,6 +89,7 @@ export const load: PageServerLoad = ({ params, locals }) => {
 
 	const played = attempts.has(locals.player.id);
 	return {
+		live: false as const,
 		week,
 		weeks: season.weeks,
 		groups: puzzle.groups,

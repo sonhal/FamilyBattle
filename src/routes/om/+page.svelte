@@ -44,11 +44,14 @@
 	<h2>Uka</h2>
 	<dl class="week">
 		<dt>Søndag–onsdag</dt>
-		<dd>Ukens oppgave er åpen. Spill når det passer, frem til onsdag kl. 23.59.</dd>
+		<dd>
+			Ukens oppgave er åpen. Spill når det passer, frem til onsdag kl. 23.59. Når du er ferdig, ser
+			du resultatene og stillingen så langt, oppdatert etter hvert som de andre blir ferdige.
+		</dd>
 		<dt>Torsdag–lørdag</dt>
 		<dd>
-			Svarene og ukens resultater vises. Du kan stemme hvis du synes oppgaven var urettferdig, og
-			admin kan annullere den.
+			Svarene og ukens endelige resultater vises. Du kan stemme hvis du synes oppgaven var
+			urettferdig, og admin kan annullere den.
 		</dd>
 		<dt>Søndag</dt>
 		<dd>Ny oppgave.</dd>

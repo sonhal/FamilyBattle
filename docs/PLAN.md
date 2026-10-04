@@ -33,6 +33,13 @@ change later without a data migration:
 - A voided week shortens the season. A reserve puzzle can be scheduled as a bonus week if the family wants one.
 - No notifications. The admin posts in the family chat.
 - No service worker for now.
+- **Live results for finished players.** While a week is open, a player who has finished it sees
+  a provisional ranking on `/uke/[n]` (place, points, groups, mistakes, time, colour grid) and a
+  provisional column for the week in `/stilling`. Only finished attempts are ranked; players
+  still mid-game are listed as "spiller nå" with no progress shown. The words and categories
+  stay hidden until Thursday, and voting opens with the review phase as before. Anyone who
+  hasn't finished gets a 404, so nobody sees a target before they play. Pages refresh on load
+  only.
 - An "Om spillet" page (`/om`, linked in the header) explains the game, the week and the season.
   Its dates and point values come from the season config and `scoring.ts`, so it can't drift.
   The final week's results are revealed Thu Dec 31: the game ends on New Year's Eve and the winner
@@ -205,8 +212,9 @@ season(weeks) -> [{playerId, total, wins, bestWeek, perWeek[]}]
   includes only weeks where puzzle.status='active' AND phase != 'open'
 ```
 
-**Leak to watch for:** standings must exclude the week that is still open. Otherwise totals that move
-mid-week reveal who has played and how well.
+**Leak to watch for:** standings exclude the week that is still open, except for a viewer who has
+finished it (`results.seasonWeeksFor`). Then the open week counts only finished attempts, so
+someone mid-game never shows a partial score, and a viewer who hasn't played sees nothing new.
 
 Unit tests cover: the tie-averaging examples from the concept doc (two tied for 1st get 8.5 each, the
 next player is 3rd), missed week = 0, voided weeks excluded, an unfinished attempt ranked below finished
@@ -214,6 +222,8 @@ ones with the same key, and the season tiebreak.
 
 ## Review, voting, voiding
 
+- During the open phase, `/uke/[n]` serves the live view described in Decisions (finished
+  viewers only, no groups, no voting). Everyone else gets a 404.
 - `/week/[n]` (phase `review` or `closed`) shows all four groups and the weekly ranking with each
   player's guess grid (the coloured squares).
 - `?/vote` is allowed only when the player has an attempt and the phase is `review`. It upserts the vote.
@@ -318,5 +328,5 @@ Note: week 1 opened Sun Oct 4 00:00 Oslo time, which was 22:00 UTC on Oct 3.
 | Header spoofing                 | No published port, verified proxy header overwrite, optional proxy secret                          |
 | Ambiguous puzzle                | Vote + void. The generator gets the `void_note`                                                    |
 | Answers leak via client payload | Groups loaded only in `$lib/server`, and the page data shape is unit-tested to contain no `groups` |
-| Standings leak mid-week         | Season query excludes the open week (tested)                                                       |
+| Standings leak mid-week         | Open week shown only to finished players, finished attempts only, no answers (tested)              |
 | Data loss                       | Volume + nightly `.backup`                                                                         |
