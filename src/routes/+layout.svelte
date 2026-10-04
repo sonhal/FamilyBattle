@@ -24,6 +24,7 @@
 		<a href="/stilling" aria-current={page.url.pathname === '/stilling' ? 'page' : undefined}
 			>Stilling</a
 		>
+		<a href="/om" aria-current={page.url.pathname === '/om' ? 'page' : undefined}>Om</a>
 		{#if data.player.isAdmin}
 			<a href="/admin" aria-current={page.url.pathname === '/admin' ? 'page' : undefined}>Admin</a>
 		{/if}

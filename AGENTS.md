@@ -23,17 +23,17 @@ through Authelia; Caddy's `forward_auth` passes `Remote-User` / `Remote-Name` /
 `Remote-Groups`, and `src/hooks.server.ts` fails closed without them. Puzzles come from
 `scripts/generate-puzzles.ts` (Claude API).
 
-| Path                                        | What                                                             |
-| ------------------------------------------- | ---------------------------------------------------------------- |
-| `src/lib/server/schedule.ts`                | Season calendar (Europe/Oslo): open Sun–Wed, review Thu–Sat      |
-| `src/lib/server/game.ts`                    | Guess evaluation (pure)                                          |
-| `src/lib/server/scoring.ts`                 | Weekly ranking, points, season standings (pure, derived on read) |
-| `src/lib/server/views.ts`                   | The only builder of board data sent to the browser (no answers)  |
-| `src/lib/server/repo.ts`, `db.ts`           | All SQL; migrations are embedded in `db.ts` and append-only      |
-| `src/lib/server/puzzle-*.ts`                | Puzzle validation and the independent review pass                |
-| `src/routes/`                               | `/` play, `/uke/[n]` results and voting, `/stilling` standings   |
-| `scripts/`                                  | Generator, `sql`, `backup`, `seed-sample`, `next-version.sh`     |
-| `docs/PLAN.md`, `DEPLOY.md`, `VPS-AGENT.md` | Design decisions, runbook, instructions for the VPS agent        |
+| Path                                        | What                                                                        |
+| ------------------------------------------- | --------------------------------------------------------------------------- |
+| `src/lib/server/schedule.ts`                | Season calendar (Europe/Oslo): open Sun–Wed, review Thu–Sat                 |
+| `src/lib/server/game.ts`                    | Guess evaluation (pure)                                                     |
+| `src/lib/server/scoring.ts`                 | Weekly ranking, points, season standings (pure, derived on read)            |
+| `src/lib/server/views.ts`                   | The only builder of board data sent to the browser (no answers)             |
+| `src/lib/server/repo.ts`, `db.ts`           | All SQL; migrations are embedded in `db.ts` and append-only                 |
+| `src/lib/server/puzzle-*.ts`                | Puzzle validation and the independent review pass                           |
+| `src/routes/`                               | `/` play, `/uke/[n]` results and voting, `/stilling` standings, `/om` about |
+| `scripts/`                                  | Generator, `sql`, `backup`, `seed-sample`, `next-version.sh`                |
+| `docs/PLAN.md`, `DEPLOY.md`, `VPS-AGENT.md` | Design decisions, runbook, instructions for the VPS agent                   |
 
 SvelteKit 3 specifics: imports use `#lib/...` with the `.ts` extension (`$lib` is gone),
 `$app/env` replaces `$app/environment`, the `Handle` type comes from `@sveltejs/kit/hooks`, and

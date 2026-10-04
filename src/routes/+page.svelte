@@ -41,7 +41,10 @@
 			<h1>Uke {data.week}</h1>
 			<p>16 ord, 4 skjulte grupper, 4 feil tillatt. Ett forsøk.</p>
 			<p>Åpen til <LocalTime iso={data.closesAt} minusMinute />.</p>
-			<p class="small">Tiden starter når du trykker Start. Den brukes bare ved likt resultat.</p>
+			<p class="small">
+				Tiden starter når du trykker Start. Den brukes bare ved likt resultat.
+				<a href="/om">Slik spiller du</a>
+			</p>
 			<form method="POST" action="?/start" use:enhance>
 				<button class="primary">Start</button>
 			</form>
