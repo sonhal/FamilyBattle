@@ -8,6 +8,8 @@ Players see Norwegian (Bokmål), puzzles included. Code, config and documentatio
 
 - `docs/PLAN.md`: design and implementation plan
 - `docs/DEPLOY.md`: deployment runbook (Docker, Caddy, Authelia)
+- `docs/VPS-AGENT.md`: instructions for the Claude agent that operates the VPS
+- `AGENTS.md`: conventions for coding agents (commits, releases, sandbox quirks)
 
 ## Local development
 
@@ -36,12 +38,14 @@ See `scripts/generate-puzzles.ts` for options (`--replace`, `--dry-run`, `--lang
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every push and pull request:
+`.github/workflows/ci.yml` runs on every pull request and push to `main`:
 
 1. **verify**: `pnpm lint`, `pnpm check`, `pnpm test`, `pnpm build`
-2. **docker**: builds the `app` and `tools` images. Pushes to the default branch and `v*` tags
-   also publish them to `ghcr.io/sonhal/familybattle` and `ghcr.io/sonhal/familybattle-tools`,
-   with provenance and SBOM attestations. Pull requests only build them.
+2. **images**: builds the `app` and `tools` images (nothing is published)
+3. **tag** (push to `main`): if the Conventional Commits since the last release call for one
+   (`scripts/next-version.sh`), tags `vX.Y.Z` and runs the pipeline on the tag
+4. **publish-images** and **release** (tags): push `ghcr.io/sonhal/familybattle` and
+   `familybattle-tools` as `X.Y.Z`, `X.Y` and `latest` with provenance, then a GitHub Release
 
-Actions are pinned to commit SHAs. Dependabot (`.github/dependabot.yml`) keeps actions, npm
-packages and base images up to date. Release by pushing a tag such as `v1.0.0`.
+PR titles must be Conventional Commits (`feat: ...`, `fix: ...`); see `AGENTS.md`. Actions are
+pinned to commit SHAs, and Dependabot keeps actions, npm packages and base images up to date.

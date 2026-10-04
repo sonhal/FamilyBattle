@@ -152,13 +152,14 @@ hand edit gets them out of sync.
 **Security: header trust is the whole model.** Anyone who can reach the container directly can send
 `Remote-User: sondre` and become you. So:
 
-- Don't publish the container port. Attach the container only to the proxy's Docker network
-  (or bind `127.0.0.1:3000` if the proxy runs on the host).
+- Publish the container port on host loopback only (`127.0.0.1:7080`), where the host's Caddy
+  reaches it, as nyttig does on the same VPS.
 - Check that the proxy **overwrites** client-supplied `Remote-*` headers. Authelia with Traefik or
   Caddy `forward_auth` copies the auth response headers over the request headers, which handles this.
   Confirm it with `curl -H 'Remote-User: someone-else'` through the proxy while logged in as yourself.
-- Defense in depth (optional): the proxy adds `X-Proxy-Secret: <random>` and the app rejects requests
-  without it.
+- Any local process can still reach the loopback port, so the proxy adds
+  `X-Proxy-Secret: <random>` and the app rejects requests without it (`PROXY_SECRET`, required
+  in production per `docs/DEPLOY.md`).
 
 ## Gameplay (server)
 
@@ -248,14 +249,17 @@ ones with the same key, and the season tiebreak.
 
 See `docs/DEPLOY.md` for the step-by-step runbook.
 
-CI (`.github/workflows/ci.yml`): lint, type check, unit tests and build on every push/PR, then
-builds the `app` and `tools` images. Pushes to the default branch and `v*` tags publish them to GHCR.
+CI (`.github/workflows/ci.yml`): lint, type check, unit tests and build, then both images, on
+every PR and push to `main`. Releases follow nyttig: a green push to `main` whose Conventional
+Commits ask for a release is tagged `vX.Y.Z` by CI, and the tag run publishes the images to GHCR
+and creates a GitHub Release (`AGENTS.md` → Releases).
 
 - Multi-stage `Dockerfile`. The `base` stage uses `node:22-bookworm` (it has the compilers
   better-sqlite3 needs) plus a global pnpm. `prod-deps` installs runtime dependencies only. `tools` adds the source for the CLI scripts. `app` is
   `node:22-bookworm-slim` with only `build/` and production `node_modules`, running as `node`.
-- `docker-compose.yml`: a named volume at `/data`, the auth/group env vars from `.env`, the Caddy
-  network, and no published ports.
+- `docker-compose.yml`: a named volume at `/data`, the auth/group env vars from `.env`, the port
+  on `127.0.0.1` only, and nyttig's hardening (read-only root, no capabilities,
+  `no-new-privileges`, rotated logs). The image has a healthcheck on `/healthz`.
 - Migrations run on boot.
 - Backups: a nightly host cron job runs `docker compose run --rm tools backup` (better-sqlite3's online
   backup, safe while the app runs) and copies the file off the volume. This matters because the

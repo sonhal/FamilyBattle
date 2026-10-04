@@ -1,44 +1,54 @@
-# Family Battle on the VPS. See docs/DEPLOY.md.
-# Images are published to GHCR by CI (.github/workflows/ci.yml). `docker compose pull`
-# fetches them; `docker compose build` builds the same images from source instead.
+# Ordkampen (Family Battle) on the VPS. See docs/DEPLOY.md.
+#
+#   cp .env.example .env              # set FAMILYBATTLE_VERSION and friends
+#   docker compose pull && docker compose up -d familybattle
+#   docker compose up -d --build      # or build from this checkout instead
+#
+# Caddy runs on the host, adds TLS and Authelia forward_auth, and proxies to
+# 127.0.0.1:${FAMILYBATTLE_PORT}. The port is published on loopback only: the
+# app trusts the Remote-* identity headers, so nothing but Caddy may reach it.
+
+name: familybattle
+
+x-hardening: &hardening
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ['no-new-privileges:true']
+  tmpfs: [/tmp]
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: '3'
+
 services:
   familybattle:
+    <<: *hardening
+    image: ghcr.io/sonhal/familybattle:${FAMILYBATTLE_VERSION:-latest}
     build:
       context: .
       target: app
-      args:
-        APP_ORIGIN: https://battle.example.com
-    image: ghcr.io/sonhal/familybattle:${FAMILYBATTLE_TAG:-latest}
-    container_name: familybattle
     restart: unless-stopped
     env_file: .env
     volumes:
       - familybattle-data:/data
-    # No published ports: the app trusts the Remote-* headers, so it must only
-    # be reachable through Caddy. If Caddy runs on the host instead of in
-    # Docker, replace `networks` with:  ports: ["127.0.0.1:3000:3000"]
-    networks:
-      - proxy
+    ports:
+      - '127.0.0.1:${FAMILYBATTLE_PORT:-7080}:3000'
 
-  # Puzzle generator CLI. Not started by `up`; run with:
+  # CLI: puzzle generator, sql, backup. Not started by `up`; run with
   #   docker compose run --rm tools generate --weeks 1-13 --reserves 2 --quiet
   tools:
+    <<: *hardening
+    image: ghcr.io/sonhal/familybattle-tools:${FAMILYBATTLE_VERSION:-latest}
     build:
       context: .
       target: tools
-    image: ghcr.io/sonhal/familybattle-tools:${FAMILYBATTLE_TAG:-latest}
     profiles: [tools]
     env_file: .env
     environment:
       - ANTHROPIC_API_KEY
     volumes:
       - familybattle-data:/data
-    network_mode: bridge
 
 volumes:
   familybattle-data:
-
-networks:
-  proxy:
-    external: true
-    name: ${PROXY_NETWORK:-caddy}

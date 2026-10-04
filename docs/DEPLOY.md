@@ -1,36 +1,56 @@
-# Deploying Family Battle (runbook)
+# Deploying Ordkampen (runbook)
 
-Written to be followed step by step, by a person or by the Claude agent on the VPS.
-Target: `https://battle.example.com`, Docker + Caddy + Authelia.
-
-> **Week 1 opened Sun Oct 4 at 00:00 Oslo time.** Do steps 1–6 first, generating week 1
-> alone, so the family can play as soon as possible. Generate the rest of the season afterwards.
+Step by step, for a person or for the Claude agent on the VPS (see also `docs/VPS-AGENT.md`).
+Target: `https://battle.example.com`. Docker runs the app; Caddy and Authelia run on the host,
+the same way as nyttig on this VPS.
 
 ## How the pieces fit
 
 ```
-browser ──► Caddy (battle.example.com)
+browser ──► Caddy on the host (battle.example.com, TLS)
               ├─ forward_auth → Authelia: logged in and in an allowed group?
               │                 copies Remote-User / Remote-Name / Remote-Groups onto the request
-              └─ reverse_proxy → familybattle:3000 (Docker network only, no published port)
-                                    └─ SQLite at /data/league.db (named volume)
+              └─ reverse_proxy → 127.0.0.1:7080 (+ X-Proxy-Secret)
+                                    └─ container "familybattle" (read-only, no capabilities)
+                                         └─ SQLite at /data/league.db (named volume familybattle_familybattle-data)
 ```
 
-**The security model rests on one rule.** The app trusts the `Remote-*` headers, so it must be
-reachable **only through Caddy**, and Caddy must **overwrite** those headers on every request.
-Step 7 verifies both.
+**The security model rests on two rules:**
+
+1. The app trusts the `Remote-*` headers, so only Caddy may talk to it. The port is published
+   on **127.0.0.1 only**, and Caddy **strips and overwrites** those headers on every request.
+2. Any local process on the VPS can still reach 127.0.0.1:7080. Set `PROXY_SECRET` so the app
+   rejects requests that don't carry Caddy's secret header.
+
+Step 7 verifies all of this.
+
+## Releases
+
+CI publishes images only for release tags `vX.Y.Z` (see `AGENTS.md` → Releases):
+
+| Image                               | Contents                             |
+| ----------------------------------- | ------------------------------------ |
+| `ghcr.io/sonhal/familybattle`       | the app                              |
+| `ghcr.io/sonhal/familybattle-tools` | the CLI (generator, `sql`, `backup`) |
+
+Each release is tagged `X.Y.Z`, `X.Y` and `latest`. Pin `FAMILYBATTLE_VERSION=X.Y.Z` in `.env`
+and upgrade on purpose. The running version is shown by `curl -s http://127.0.0.1:7080/healthz`.
+Release notes: <https://github.com/sonhal/FamilyBattle/releases>.
+
+Verify an image's provenance (optional):
+`gh attestation verify oci://ghcr.io/sonhal/familybattle:0.1.0 --repo sonhal/FamilyBattle`
 
 ## 1. Authelia: groups and access rule
 
-Create two groups in Authelia's user backend (in the file backend, add them to users in
-`users_database.yml`; in LDAP, create the groups):
+Create two groups in Authelia's user backend (file backend: add them to the users in
+`users_database.yml`; LDAP: create the groups):
 
 | Group                | Who                                                                |
 | -------------------- | ------------------------------------------------------------------ |
 | `familybattle`       | every player                                                       |
 | `familybattle-admin` | the admin (Sondre). Admins can also play, so no need to be in both |
 
-Different names are fine. If you use them, set `PLAYER_GROUP` / `ADMIN_GROUP` in `.env` (step 3).
+Different names are fine; then set `PLAYER_GROUP` / `ADMIN_GROUP` in `.env`.
 
 Add an access-control rule **above** any broader rule that would match the domain:
 
@@ -44,116 +64,105 @@ access_control:
         - 'group:familybattle-admin'
 ```
 
-Reload Authelia. The app also checks the groups itself, so this rule is defense in depth: it
-stops non-players at the login page.
+Reload Authelia. The app checks the groups too; this rule stops non-players at the login page.
 
-## 2. Get the code
+## 2. Get the deploy files
+
+Only `docker-compose.yml` and `.env.example` are needed from the repository:
 
 ```sh
 git clone https://github.com/sonhal/FamilyBattle.git /opt/familybattle
 cd /opt/familybattle
-git checkout claude/implementation-plan   # until it is merged to the default branch
+git checkout v0.1.0          # the release you deploy; see the releases page
 ```
 
 ## 3. Configure `.env`
 
 ```sh
 cp .env.example .env
-openssl rand -hex 32   # use as PROXY_SECRET (recommended)
+chmod 600 .env
+openssl rand -hex 32         # → PROXY_SECRET
 ```
 
 Edit `.env`:
 
-- `PROXY_SECRET=<the value above>`
-- `PROXY_NETWORK=<name of the Docker network Caddy is attached to>`. Find it with
-  `docker inspect <caddy-container> --format '{{json .NetworkSettings.Networks}}'`.
-  The default is `caddy`.
-- Change `PLAYER_GROUP` / `ADMIN_GROUP` only if step 1 used other names.
-- Don't put `ANTHROPIC_API_KEY` in `.env`. Pass it on the command line in step 5.
+- `FAMILYBATTLE_VERSION=0.1.0` (the release, without the `v`)
+- `PROXY_SECRET=<the value above>`. The same value goes into Caddy in step 6.
+- `FAMILYBATTLE_PORT=7080` unless something else uses that port (nyttig uses 7070 and 7071).
+- `PLAYER_GROUP` / `ADMIN_GROUP` only if step 1 used other names.
+- Do **not** put `ANTHROPIC_API_KEY` in `.env`. Pass it on the command line in step 5.
 
-**If Caddy runs on the host rather than in Docker:** in `docker-compose.yml`, replace the
-`networks:` block of the `familybattle` service with `ports: ["127.0.0.1:3000:3000"]`, and use
-`localhost:3000` as the upstream in step 6. Never publish on `0.0.0.0`.
+## 4. Pull the images and start the app
 
-## 4. Get the images and start the app
-
-CI (`.github/workflows/ci.yml`) publishes two images to GitHub Container Registry on every push
-to the default branch and on every `v*` tag:
-
-| Image                               | Contents                             |
-| ----------------------------------- | ------------------------------------ |
-| `ghcr.io/sonhal/familybattle`       | the app                              |
-| `ghcr.io/sonhal/familybattle-tools` | the CLI (generator, `sql`, `backup`) |
-
-Each image is tagged `latest`, `sha-<commit>`, and `X.Y.Z` / `X.Y` for version tags.
-
-**Option A: pull from GHCR (preferred once CI has published).** The packages are private, so
-log in once with a GitHub _classic_ personal access token that has only the `read:packages`
-scope (fine-grained tokens can't read GHCR):
+The GHCR packages are private until made public in their package settings. Until then, log in
+once with a GitHub _classic_ personal access token that has only `read:packages`:
 
 ```sh
 echo <token> | docker login ghcr.io -u sonhal --password-stdin
 docker compose pull familybattle
 docker compose --profile tools pull tools
-```
-
-To pin a release, set `FAMILYBATTLE_TAG=1.2.0` (or `sha-abc1234`) in `.env`. The default is `latest`.
-
-**Option B: build on the VPS** (no registry access needed):
-
-```sh
-docker compose build familybattle
-docker compose --profile tools build tools
-```
-
-Then start it:
-
-```sh
 docker compose up -d familybattle
-docker compose logs familybattle   # expect: Listening on http://0.0.0.0:3000
+docker compose ps                                # STATUS shows (healthy)
+curl -s http://127.0.0.1:7080/healthz            # ok v0.1.0
 ```
+
+To build from the checkout instead (no registry access, unreleased commits):
+`docker compose up -d --build familybattle` and `docker compose --profile tools build tools`.
 
 ## 5. Generate puzzles
 
-Week 1 first, so it is playable as soon as possible:
-
 ```sh
 ANTHROPIC_API_KEY=sk-ant-... docker compose run --rm tools generate --weeks 1 --quiet
-```
-
-Then the rest of the season plus two reserves. This takes a while, since each puzzle is a
-separate, carefully checked request:
-
-```sh
 ANTHROPIC_API_KEY=sk-ant-... docker compose run --rm tools generate --weeks 2-13 --reserves 2 --quiet
 ```
 
-- `--quiet` hides the answers (the admin also plays). Without it the puzzles are printed.
+- **Always pass `--quiet`.** The admin also plays; quiet mode prints neither the puzzles nor
+  the rejection reasons (which quote words).
+- Each puzzle is validated, then reviewed by a separate Claude call for words that could fit
+  another group, and regenerated if flagged. Expect a few minutes per puzzle.
 - Re-running is safe: weeks that already have a puzzle are skipped.
-- Check what exists without revealing answers:
+- See what exists without revealing answers:
   `docker compose run --rm tools sql "SELECT id, week, status FROM puzzles"`
 
-## 6. Caddy site
+## 6. Caddy site (on the host)
 
-Add this to the Caddyfile, adapting the Authelia upstream and the `uri` to match the
-existing protected sites (Authelia ≥ 4.38 uses `/api/authz/forward-auth`):
+Add this to the host's Caddyfile. Copy the Authelia address and `uri` from the existing
+protected sites (Authelia ≥ 4.38 uses `/api/authz/forward-auth`).
 
 ```caddyfile
 battle.example.com {
-	route {
-		# Never let a client supply identity headers itself.
-		request_header -Remote-User
-		request_header -Remote-Groups
-		request_header -Remote-Name
-		request_header -Remote-Email
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		?X-Content-Type-Options nosniff
+		?Referrer-Policy same-origin
+		?X-Frame-Options DENY
+	}
 
-		forward_auth authelia:9091 {
-			uri /api/authz/forward-auth
-			copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
-		}
-
-		reverse_proxy familybattle:3000 {
+	# The home-screen manifest and icons are fetched without cookies by some
+	# browsers (iOS for the icon), so they skip Authelia. They hold nothing private.
+	@public path /manifest.webmanifest /icon.svg /icon-192.png /icon-512.png /apple-touch-icon.png
+	handle @public {
+		reverse_proxy 127.0.0.1:7080 {
 			header_up X-Proxy-Secret {$FAMILYBATTLE_PROXY_SECRET}
+		}
+	}
+
+	handle {
+		route {
+			# Never let a client supply identity headers itself.
+			request_header -Remote-User
+			request_header -Remote-Groups
+			request_header -Remote-Name
+			request_header -Remote-Email
+
+			forward_auth 127.0.0.1:9091 {
+				uri /api/authz/forward-auth
+				copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
+			}
+
+			reverse_proxy 127.0.0.1:7080 {
+				header_up X-Proxy-Secret {$FAMILYBATTLE_PROXY_SECRET}
+			}
 		}
 	}
 }
@@ -161,51 +170,63 @@ battle.example.com {
 
 - `route` keeps the directives in the written order, so the stripping happens before
   `forward_auth` sets the real values.
-- `{$FAMILYBATTLE_PROXY_SECRET}` is read from Caddy's environment, where it must equal
-  `PROXY_SECRET` in the app's `.env`. If you'd rather not touch Caddy's environment, paste the
-  value in directly. If you skip the proxy secret entirely, drop the `header_up` line and leave
-  `PROXY_SECRET` empty.
-- Reload Caddy: `docker exec <caddy-container> caddy reload --config /etc/caddy/Caddyfile`, or the equivalent for your setup.
+- `{$FAMILYBATTLE_PROXY_SECRET}` is read from Caddy's environment when the Caddyfile is
+  loaded. With Caddy under systemd: `sudo systemctl edit caddy`, add
+  `[Service]` / `Environment=FAMILYBATTLE_PROXY_SECRET=<value>`, then `sudo systemctl restart caddy`.
+  (Pasting the value directly into the Caddyfile also works; keep the file private then.)
+- Validate and reload: `caddy validate --config /etc/caddy/Caddyfile && sudo systemctl reload caddy`.
 
 ## 7. Verify (do not skip)
 
 ```sh
-# a) Not logged in: must redirect to Authelia (302/401), never 200, even with spoofed headers.
+# a) From outside, not logged in: must redirect to Authelia (302/401), never 200,
+#    also with spoofed headers.
 curl -s -o /dev/null -w '%{http_code}\n' https://battle.example.com/
 curl -s -o /dev/null -w '%{http_code}\n' -H 'Remote-User: sondre' -H 'Remote-Groups: familybattle-admin' https://battle.example.com/
 
-# b) The app port must not be reachable from outside the VPS (expect a connection error):
-curl -m 5 http://<public-ip>:3000/ ; echo "exit=$?"
+# b) The public icon path works without login (200):
+curl -s -o /dev/null -w '%{http_code}\n' https://battle.example.com/icon-192.png
 
-# c) Without Caddy's secret, the app itself refuses (expect 401):
-docker run --rm --network <PROXY_NETWORK> curlimages/curl -s -o /dev/null -w '%{http_code}\n' \
-  -H 'Remote-User: x' -H 'Remote-Groups: familybattle' http://familybattle:3000/
+# c) The port listens on loopback only (expect 127.0.0.1:7080, never 0.0.0.0 or [::]):
+ss -ltn | grep 7080
+
+# d) On the VPS, forged headers without Caddy's secret are refused (expect 401):
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Remote-User: x' -H 'Remote-Groups: familybattle' http://127.0.0.1:7080/
 ```
 
 Then in a browser:
 
-- Log in as a player. You should see "Week 1 of 13" and a Start button. Your name appears top right.
-- Log in as someone outside the groups. Authelia should deny access.
+- Log in as a player: "Uke 1 av 13" and a Start button, with your name top right.
+- Log in as someone outside the groups: Authelia denies access.
 
 ## 8. Backups
 
-The database holds the whole season. Add a nightly host cron job (`crontab -e`):
+The database holds the whole season. Nightly host cron job (`crontab -e`):
 
 ```cron
 17 3 * * * cd /opt/familybattle && docker compose run --rm tools backup >/dev/null 2>&1 && docker run --rm -v familybattle_familybattle-data:/data -v /var/backups/familybattle:/out alpine sh -c 'cp /data/backups/* /out/ && rm /data/backups/*'
 ```
 
-Check the volume name with `docker volume ls`. Compose prefixes it with the project directory name.
+To restore: `docker compose stop familybattle`, copy the backup into the volume as
+`league.db` (owned by uid 1000, the image's `node` user), then `docker compose start familybattle`.
+
+## Upgrading
+
+```sh
+cd /opt/familybattle
+git fetch --tags && git checkout vX.Y.Z      # compose file of the new release
+$EDITOR .env                                 # FAMILYBATTLE_VERSION=X.Y.Z
+docker compose pull familybattle && docker compose --profile tools pull tools
+docker compose run --rm tools backup         # migrations run at startup; back up first
+docker compose up -d familybattle
+curl -s http://127.0.0.1:7080/healthz        # ok vX.Y.Z
+```
 
 ## Day-to-day operations
 
-| Task                                      | Command                                                                                                                                                                  |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Update the app                            | `docker compose pull familybattle && docker compose up -d familybattle` (Option B: `git pull && docker compose build familybattle && docker compose up -d familybattle`) |
-| Logs                                      | `docker compose logs -f familybattle`                                                                                                                                    |
-| Inspect data                              | `docker compose run --rm tools sql "SELECT * FROM players"`                                                                                                              |
-| Void week N (until the admin page exists) | `docker compose run --rm tools sql "UPDATE puzzles SET status='voided', void_note='<why>' WHERE week=N"`                                                                 |
-| Regenerate an unplayed week               | `ANTHROPIC_API_KEY=... docker compose run --rm tools generate --replace N --quiet`                                                                                       |
-
-Update the tools image together with the app: `docker compose --profile tools pull tools`
-(Option B: `docker compose --profile tools build tools` after `git pull`).
+| Task                                      | Command                                                                                                  |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Logs                                      | `docker compose logs -f familybattle`                                                                    |
+| Inspect data                              | `docker compose run --rm tools sql "SELECT * FROM players"`                                              |
+| Void week N (until the admin page exists) | `docker compose run --rm tools sql "UPDATE puzzles SET status='voided', void_note='<why>' WHERE week=N"` |
+| Regenerate an unplayed week               | `ANTHROPIC_API_KEY=... docker compose run --rm tools generate --replace N --quiet`                       |
