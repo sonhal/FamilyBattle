@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import favicon from '#lib/assets/favicon.svg';
 
 	let { data, children } = $props();
@@ -12,11 +13,18 @@
 	<meta name="theme-color" content="#1f2937" />
 	<meta name="mobile-web-app-capable" content="yes" />
 	<meta name="apple-mobile-web-app-capable" content="yes" />
-	<title>Family Battle</title>
+	<meta name="apple-mobile-web-app-title" content="Ordkampen" />
+	<title>Ordkampen</title>
 </svelte:head>
 
 <header>
-	<a class="brand" href="/">Family Battle</a>
+	<a class="brand" href="/">Ordkampen</a>
+	<nav>
+		<a href="/" aria-current={page.url.pathname === '/' ? 'page' : undefined}>Spill</a>
+		<a href="/stilling" aria-current={page.url.pathname === '/stilling' ? 'page' : undefined}
+			>Stilling</a
+		>
+	</nav>
 	<span class="who">{data.player.name}</span>
 </header>
 
@@ -90,6 +98,24 @@
 		font-size: 1.15rem;
 		color: inherit;
 		text-decoration: none;
+	}
+
+	nav {
+		display: flex;
+		gap: 12px;
+		margin-left: auto;
+		margin-right: 12px;
+	}
+
+	nav a {
+		color: var(--muted);
+		text-decoration: none;
+		font-size: 0.95rem;
+	}
+
+	nav a[aria-current='page'] {
+		color: var(--fg);
+		font-weight: 700;
 	}
 
 	.who {

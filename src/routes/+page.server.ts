@@ -12,7 +12,6 @@ const guessLimiter = createRateLimiter(10, 10_000);
 export const load: PageServerLoad = ({ locals }) => {
 	const t = now();
 	const week = currentWeek(season, t);
-	const playerCount = repo.players().length;
 
 	if (week === null) {
 		const beforeSeason = t < opensAt(season, 1).toJSDate();
@@ -27,21 +26,23 @@ export const load: PageServerLoad = ({ locals }) => {
 		week,
 		weeks: season.weeks,
 		closesAt: reviewStartsAt(season, week).toISO()!,
-		nextOpensAt: closesAt(season, week).toISO()!,
-		playerCount
+		nextOpensAt: closesAt(season, week).toISO()!
 	};
 
 	if (!puzzle) return { ...base, state: 'missing' as const };
 	if (phase !== 'open') return { ...base, state: 'review' as const };
 
 	const playedCount = repo.countAttempts(puzzle.id);
+	// Everyone who has played this season, so lurkers and a non-playing admin don't count.
+	const playerCount = repo.countSeasonPlayers(week);
 	const attempt = repo.attempt(puzzle.id, locals.player.id);
-	if (!attempt) return { ...base, state: 'not_started' as const, playedCount };
+	if (!attempt) return { ...base, state: 'not_started' as const, playedCount, playerCount };
 
 	return {
 		...base,
 		state: 'playing' as const,
 		playedCount,
+		playerCount,
 		board: boardView(puzzle.groups, attempt, `${locals.player.id}:${puzzle.id}`)
 	};
 };
