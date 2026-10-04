@@ -69,15 +69,13 @@
 	<p class="finale">
 		Siste uke stenger {data.lastPlayDay}.
 		{#if data.winnerOnNewYearsEve}
-			På nyttårsaften, {data.winnerDay}, kommer de siste resultatene, og sesongens vinner kåres.
+			Spillet avsluttes nyttårsaften, {data.winnerDay}, da de siste resultatene kommer. Sesongens
+			vinner kåres under nyttårsmiddagen.
 		{:else}
 			{data.winnerDay} kommer de siste resultatene, og sesongens vinner kåres.
 		{/if}
 	</p>
-	<p class="muted">
-		Ved likt totalt vinner den med flest ukeseire, deretter beste enkeltuke. Stillingen er endelig
-		{data.seasonEnd}, når siste uke er ferdig.
-	</p>
+	<p class="muted">Ved likt totalt vinner den med flest ukeseire, deretter beste enkeltuke.</p>
 </section>
 
 <style>

@@ -35,7 +35,8 @@ change later without a data migration:
 - No service worker for now.
 - An "Om spillet" page (`/om`, linked in the header) explains the game, the week and the season.
   Its dates and point values come from the season config and `scoring.ts`, so it can't drift.
-  The final week's results are revealed Thu Dec 31, so the winner is crowned on New Year's Eve.
+  The final week's results are revealed Thu Dec 31: the game ends on New Year's Eve and the winner
+  is announced at the family's New Year's dinner.
 
 ## Season calendar
 

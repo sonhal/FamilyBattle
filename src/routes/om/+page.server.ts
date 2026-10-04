@@ -1,5 +1,5 @@
 import { season } from '#lib/server/index.ts';
-import { closesAt, opensAt, reviewStartsAt } from '#lib/server/schedule.ts';
+import { opensAt, reviewStartsAt } from '#lib/server/schedule.ts';
 import { DROP_WORST, POINTS } from '#lib/server/scoring.ts';
 import type { DateTime } from 'luxon';
 import type { PageServerLoad } from './$types';
@@ -17,7 +17,6 @@ export const load: PageServerLoad = () => {
 		seasonStart: day(opensAt(season, 1)),
 		lastPlayDay: day(reveal.minus({ days: 1 })),
 		winnerDay: day(reveal),
-		winnerOnNewYearsEve: reveal.month === 12 && reveal.day === 31,
-		seasonEnd: day(closesAt(season, last))
+		winnerOnNewYearsEve: reveal.month === 12 && reveal.day === 31
 	};
 };
