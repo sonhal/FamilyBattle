@@ -33,6 +33,9 @@ change later without a data migration:
 - A voided week shortens the season. A reserve puzzle can be scheduled as a bonus week if the family wants one.
 - No notifications. The admin posts in the family chat.
 - No service worker for now.
+- An "Om spillet" page (`/om`, linked in the header) explains the game, the week and the season.
+  Its dates and point values come from the season config and `scoring.ts`, so it can't drift.
+  The final week's results are revealed Thu Dec 31, so the winner is crowned on New Year's Eve.
 
 ## Season calendar
 
@@ -76,6 +79,7 @@ src/
     +page.server.ts / +page.svelte        this week: board, or "played: 4 of 6" while open
     week/[n]/+page.server.ts / .svelte    review: answers, weekly ranking, your vote
     standings/+page.server.ts / .svelte   season table
+    om/+page.server.ts / .svelte          "Om spillet": rules, weekly rhythm, season finale
     admin/+page.server.ts / .svelte       vote totals, void/unvoid
 scripts/generate-puzzles.ts  puzzle generator (Claude API)
 scripts/sql.ts, backup.ts    hand fixes and backups (the image has no sqlite3 CLI)
