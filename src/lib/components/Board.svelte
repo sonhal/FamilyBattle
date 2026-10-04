@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import type { BoardView, Color } from '#lib/types.ts';
+	import type { BoardView } from '#lib/types.ts';
+	import { fitText } from '#lib/fit-text.ts';
+	import GroupRow from './GroupRow.svelte';
+	import GuessGrid from './GuessGrid.svelte';
 	import LocalTime from './LocalTime.svelte';
 
 	type FormResult = { result?: string; message?: string } | null | undefined;
@@ -25,13 +28,6 @@
 		already_guessed: 'Allerede gjettet.'
 	};
 
-	const emoji: Record<Color, string> = {
-		yellow: '🟨',
-		green: '🟩',
-		blue: '🟦',
-		purple: '🟪'
-	};
-
 	function toggle(word: string) {
 		if (picked.includes(word)) selected = picked.filter((w) => w !== word);
 		else if (picked.length < 4) selected = [...picked, word];
@@ -47,16 +43,9 @@
 	}
 </script>
 
-{#snippet group(g: { category: string; color: Color; words: string[] })}
-	<div class="group" style:background={`var(--${g.color})`}>
-		<strong>{g.category}</strong>
-		<span>{g.words.join(', ')}</span>
-	</div>
-{/snippet}
-
 <div class="board">
 	{#each board.solved as g (g.category)}
-		{@render group(g)}
+		<GroupRow group={g} />
 	{/each}
 
 	{#if !board.finished}
@@ -69,7 +58,7 @@
 					aria-pressed={picked.includes(word)}
 					onclick={() => toggle(word)}
 				>
-					{word}
+					<span class="word" use:fitText>{word}</span>
 				</button>
 			{/each}
 		</div>
@@ -80,14 +69,10 @@
 	<section class="done">
 		<h2>{board.revealed.length === 0 ? 'Løst!' : 'Bedre lykke neste uke!'}</h2>
 		{#each board.revealed as g (g.category)}
-			{@render group(g)}
+			<GroupRow group={g} />
 		{/each}
 		{#if board.grid}
-			<div class="emoji" aria-label="Dine gjetninger">
-				{#each board.grid as row, i (i)}
-					<div>{row.map((c) => emoji[c]).join('')}</div>
-				{/each}
-			</div>
+			<div class="emoji"><GuessGrid grid={board.grid} label="Dine gjetninger" /></div>
 		{/if}
 		<p class="muted">
 			Resultater og stilling vises når spillet stenger, <LocalTime iso={closesAt} />.
@@ -153,11 +138,18 @@
 		font-weight: 700;
 		font-size: clamp(0.62rem, 3.2vw, 0.95rem);
 		text-transform: uppercase;
-		overflow-wrap: anywhere;
 		cursor: pointer;
 		transition:
 			background 120ms,
 			transform 80ms;
+	}
+
+	.word {
+		display: block;
+		width: 100%;
+		overflow: hidden;
+		overflow-wrap: anywhere;
+		text-align: center;
 	}
 
 	.tile:active {
@@ -167,28 +159,6 @@
 	.tile.selected {
 		background: var(--tile-selected);
 		color: var(--tile-selected-fg);
-	}
-
-	.group {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 2px;
-		min-height: 64px;
-		padding: 8px;
-		border-radius: 8px;
-		color: var(--on-group);
-		text-align: center;
-	}
-
-	.group strong {
-		text-transform: uppercase;
-	}
-
-	.group span {
-		text-transform: uppercase;
-		font-size: 0.85rem;
 	}
 
 	.mistakes {

@@ -31,8 +31,10 @@
 		</section>
 	{:else if data.state === 'review'}
 		<section class="notice">
-			<h1>Uke {data.week} er stengt for spill</h1>
-			<p>Resultatene blir avslørt. Neste oppgave åpner <LocalTime iso={data.nextOpensAt} />.</p>
+			<h1>Uke {data.week} er ferdigspilt</h1>
+			<p><a class="primary" href="/uke/{data.week}">Se resultatene</a></p>
+			<p><a href="/stilling">Sesongstilling</a></p>
+			<p class="small">Neste oppgave åpner <LocalTime iso={data.nextOpensAt} />.</p>
 		</section>
 	{:else if data.state === 'not_started'}
 		<section class="notice">
@@ -76,6 +78,15 @@
 
 	.error {
 		color: #dc2626;
+	}
+
+	a.primary {
+		display: inline-block;
+		text-decoration: none;
+	}
+
+	a {
+		color: inherit;
 	}
 
 	.primary {
