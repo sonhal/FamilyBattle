@@ -274,7 +274,7 @@ builds the `app` and `tools` images. Pushes to the default branch and `v*` tags 
 
 ## Milestones (rush plan)
 
-Status: **M0 done** (play flow, generator, Docker, runbook in `docs/DEPLOY.md`).
+Status: **M0, M1 done; M2 (admin page) in review** (play flow, generator, Docker, runbook in `docs/DEPLOY.md`).
 Note: week 1 opened Sun Oct 4 00:00 Oslo time, which was 22:00 UTC on Oct 3.
 
 **M0, tonight (Sat Oct 3) → playable by Sun morning**
