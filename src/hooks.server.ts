@@ -6,7 +6,7 @@ import { config } from '#lib/server/config.ts';
 
 /**
  * Local development has no Caddy/Authelia in front, so DEV_USERS fakes the
- * headers. Format: "sondre:admin,anna,bob". Switch user with ?as=anna.
+ * headers. Format: "sonhal:admin,anna,bob". Switch user with ?as=anna.
  * Compiled out of production builds via `dev`.
  */
 function devHeaders(event: Parameters<Handle>[0]['event']): Headers {

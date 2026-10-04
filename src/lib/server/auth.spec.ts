@@ -32,8 +32,8 @@ describe('resolveIdentity', () => {
 			)
 		).toEqual({ ok: true, user: 'anna', name: 'Anna', isAdmin: false });
 		expect(
-			resolveIdentity(h({ 'Remote-User': 'sondre', 'Remote-Groups': 'x, familybattle-admin' }), cfg)
-		).toEqual({ ok: true, user: 'sondre', name: 'sondre', isAdmin: true });
+			resolveIdentity(h({ 'Remote-User': 'sonhal', 'Remote-Groups': 'x, familybattle-admin' }), cfg)
+		).toEqual({ ok: true, user: 'sonhal', name: 'sonhal', isAdmin: true });
 	});
 
 	it('does not treat a group name substring as membership', () => {

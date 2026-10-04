@@ -1,7 +1,9 @@
 # Deploying Ordkampen (runbook)
 
 Step by step, for a person or for the Claude agent on the VPS (see also `docs/VPS-AGENT.md`).
-Target: `https://battle.example.com`. Docker runs the app; Caddy and Authelia run on the host,
+Target: `https://battle.example.com` is a placeholder throughout: use the real domain, which
+the owner provides and which never goes into this public repository. Docker runs the app;
+Caddy and Authelia run on the host,
 the same way as nyttig on this VPS.
 
 ## How the pieces fit
@@ -48,7 +50,7 @@ Create two groups in Authelia's user backend (file backend: add them to the user
 | Group                | Who                                                                |
 | -------------------- | ------------------------------------------------------------------ |
 | `familybattle`       | every player                                                       |
-| `familybattle-admin` | the admin (Sondre). Admins can also play, so no need to be in both |
+| `familybattle-admin` | the admin (sonhal). Admins can also play, so no need to be in both |
 
 Different names are fine; then set `PLAYER_GROUP` / `ADMIN_GROUP` in `.env`.
 
@@ -170,6 +172,10 @@ battle.example.com {
 
 - `route` keeps the directives in the written order, so the stripping happens before
   `forward_auth` sets the real values.
+- Keep Caddy's defaults for the upstream headers: it passes `Host` through unchanged and sets
+  `X-Forwarded-Proto: https`. The app derives its origin from those two (the scheme defaults to
+  https) for the CSRF check on form posts, so a rewritten `Host` makes every form post fail
+  with 403.
 - `{$FAMILYBATTLE_PROXY_SECRET}` is read from Caddy's environment when the Caddyfile is
   loaded. With Caddy under systemd: `sudo systemctl edit caddy`, add
   `[Service]` / `Environment=FAMILYBATTLE_PROXY_SECRET=<value>`, then `sudo systemctl restart caddy`.
@@ -182,7 +188,7 @@ battle.example.com {
 # a) From outside, not logged in: must redirect to Authelia (302/401), never 200,
 #    also with spoofed headers.
 curl -s -o /dev/null -w '%{http_code}\n' https://battle.example.com/
-curl -s -o /dev/null -w '%{http_code}\n' -H 'Remote-User: sondre' -H 'Remote-Groups: familybattle-admin' https://battle.example.com/
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Remote-User: sonhal' -H 'Remote-Groups: familybattle-admin' https://battle.example.com/
 
 # b) The public icon path works without login (200):
 curl -s -o /dev/null -w '%{http_code}\n' https://battle.example.com/icon-192.png
@@ -224,9 +230,9 @@ curl -s http://127.0.0.1:7080/healthz        # ok vX.Y.Z
 
 ## Day-to-day operations
 
-| Task                        | Command                                                                                   |
-| --------------------------- | ----------------------------------------------------------------------------------------- |
-| Logs                        | `docker compose logs -f familybattle`                                                     |
-| Inspect data                | `docker compose run --rm tools sql "SELECT * FROM players"`                               |
+| Task                        | Command                                                                                     |
+| --------------------------- | ------------------------------------------------------------------------------------------- |
+| Logs                        | `docker compose logs -f familybattle`                                                       |
+| Inspect data                | `docker compose run --rm tools sql "SELECT * FROM players"`                                 |
 | Void or restore a week      | `https://battle.example.com/admin` (members of `familybattle-admin`), after play has closed |
-| Regenerate an unplayed week | `ANTHROPIC_API_KEY=... docker compose run --rm tools generate --replace N --quiet`        |
+| Regenerate an unplayed week | `ANTHROPIC_API_KEY=... docker compose run --rm tools generate --replace N --quiet`          |

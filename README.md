@@ -16,7 +16,7 @@ Players see Norwegian (Bokmål), puzzles included. Code, config and documentatio
 ```sh
 pnpm install
 pnpm seed:sample 1                     # sample puzzle as week 1 in ./data/league.db
-DEV_USERS="sondre:admin,anna,bob" NOW_OVERRIDE="2026-10-04T10:00:00Z" pnpm dev
+DEV_USERS="sonhal:admin,anna,bob" NOW_OVERRIDE="2026-10-04T10:00:00Z" pnpm dev
 ```
 
 There is no Authelia in dev. `DEV_USERS` fakes the identity headers, and `?as=anna` switches

@@ -13,7 +13,7 @@ gameplay, scoring, voting, data model) are not repeated here; this plan covers h
 | Auth     | Existing forward-auth proxy. The app reads identity from request headers                               |
 | Admin    | Membership in an Authelia group (`ADMIN_GROUP`, default `familybattle-admin`)                          |
 | Players  | Membership in an Authelia group (`PLAYER_GROUP`, default `familybattle`)                               |
-| Proxy    | Caddy `forward_auth` → Authelia, site `battle.example.com`                                               |
+| Proxy    | Caddy `forward_auth` → Authelia, site `battle.example.com`                                             |
 | Client   | Mobile-first PWA                                                                                       |
 | Language | Norwegian (Bokmål) for everything players see, puzzles included. English for code, config and docs     |
 | Timezone | `Europe/Oslo` for all phase boundaries (Luxon); each player sees deadlines in their own local time     |
@@ -150,7 +150,7 @@ hand edit gets them out of sync.
    show up as league players.
 
 **Security: header trust is the whole model.** Anyone who can reach the container directly can send
-`Remote-User: sondre` and become you. So:
+`Remote-User: sonhal` and become you. So:
 
 - Publish the container port on host loopback only (`127.0.0.1:7080`), where the host's Caddy
   reaches it, as nyttig does on the same VPS.
@@ -271,8 +271,10 @@ and creates a GitHub Release (`AGENTS.md` → Releases).
 - The config lives in `vite.config.ts` (`sveltekit({ adapter, paths })`); there is no `svelte.config.js`.
 - `$lib` is replaced by Node subpath imports: `#lib/server/game.ts` (with the `.ts` extension).
 - `$app/env` replaces `$app/environment`; the `Handle` type comes from `@sveltejs/kit/hooks`.
-- adapter-node no longer reads an `ORIGIN` env var. The public origin is `paths.origin`, set at
-  build time from the `APP_ORIGIN` Docker build arg. SvelteKit's CSRF check compares against it.
+- adapter-node no longer reads an `ORIGIN` env var. Instead of baking the public origin into
+  the build (`paths.origin`), the image sets `PROTOCOL_HEADER=x-forwarded-proto`: the origin
+  is the `Host` header plus Caddy's `X-Forwarded-Proto`, which SvelteKit's CSRF check compares
+  form posts against. No domain lives in the code or the images.
 - Package manager: pnpm (pinned via `packageManager`). `pnpm-workspace.yaml` allows the build
   scripts of better-sqlite3 and esbuild, which pnpm blocks by default.
 

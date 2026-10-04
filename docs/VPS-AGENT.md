@@ -14,12 +14,14 @@ runs on this VPS next to nyttig, in the same style: Docker containers published 
 loopback ports, Caddy and Authelia on the host. The season runs Sun Oct 4 – Jan 3. Week 1 is
 already open, so getting it playable is urgent.
 
-`docs/DEPLOY.md` in the repository is the runbook. This file says which parts to do, in what
+`docs/DEPLOY.md` in the repository is the runbook. It uses `battle.example.com` as a
+placeholder: ask sonhal for the real domain and use it wherever the placeholder appears. Never
+write the real domain into the repository, which is public. This file says which parts to do, in what
 order, and the rules that apply while you do them.
 
 ## Rules
 
-1. **Never reveal puzzle answers.** The admin (Sondre) plays too. Always run the generator with
+1. **Never reveal puzzle answers.** The admin (sonhal) plays too. Always run the generator with
    `--quiet`. Don't `SELECT groups` from the database, don't print puzzle JSON, and don't open
    the game as a player.
 2. **Never expose the app port beyond 127.0.0.1**, and never remove the header stripping or
@@ -29,7 +31,7 @@ order, and the rules that apply while you do them.
    before editing it (`cp file file.bak-$(date +%F)`).
 4. **Secrets:** `.env` gets `chmod 600`. The Anthropic API key is passed on the command line
    only, never written to a file or a log. Don't paste secrets into your report.
-5. **Stop and ask Sondre** if a step fails in a way the runbook doesn't cover, if port 7080 is
+5. **Stop and ask sonhal** if a step fails in a way the runbook doesn't cover, if port 7080 is
    taken, if the Authelia groups or users are unclear, or if any verification in step 7 fails.
    Don't work around a failed security check.
 
@@ -37,7 +39,7 @@ order, and the rules that apply while you do them.
 
 Follow `docs/DEPLOY.md`:
 
-1. **Step 1, Authelia.** Create the groups `familybattle` and `familybattle-admin`. Ask Sondre
+1. **Step 1, Authelia.** Create the groups `familybattle` and `familybattle-admin`. Ask sonhal
    which users go in which group if you don't know. Add the access rule and reload Authelia.
 2. **Steps 2–4.** Check out the **latest release tag** listed at
    <https://github.com/sonhal/FamilyBattle/releases> (not `main`), set
@@ -47,7 +49,7 @@ Follow `docs/DEPLOY.md`:
    protected sites. Put `FAMILYBATTLE_PROXY_SECRET` in Caddy's environment. Validate, then
    reload.
 4. **Step 7, verify.** Run all four checks. Every one must give the expected result.
-5. **Step 5, puzzles.** Ask Sondre for the Anthropic API key if it isn't available to you.
+5. **Step 5, puzzles.** Ask sonhal for the Anthropic API key if it isn't available to you.
    Generate week 1 first, then weeks 2–13 and 2 reserves, all with `--quiet`.
    `SELECT id, week, status FROM puzzles` should then list weeks 1–13 plus 2 rows with an empty week.
 6. **Step 8, backups.** Install the nightly cron job and run it once by hand. Check that a file
@@ -55,7 +57,7 @@ Follow `docs/DEPLOY.md`:
 
 ## Report back
 
-Write a short report to Sondre:
+Write a short report to sonhal:
 
 - the deployed version (the `/healthz` output)
 - the result of each step 7 check (status codes, and the `ss` output)

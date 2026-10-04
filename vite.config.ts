@@ -27,11 +27,6 @@ export default defineConfig({
 					'frame-ancestors': ['none'],
 					'object-src': ['none']
 				}
-			},
-			paths: {
-				// Public origin behind Caddy, used by the CSRF check on form posts.
-				// Set at build time (Docker build arg); unset in local dev.
-				origin: process.env.APP_ORIGIN || undefined
 			}
 		})
 	],

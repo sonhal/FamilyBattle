@@ -30,14 +30,17 @@ CMD ["generate"]
 # ---- build: compile the app ----
 FROM deps AS build
 COPY . .
-ARG APP_ORIGIN=https://battle.example.com
-RUN APP_ORIGIN=$APP_ORIGIN pnpm build
+RUN pnpm build
 
 # ---- app: what runs behind Caddy ----
 FROM node:22-bookworm-slim AS app
 # Release version (v0.1.0) stamped by CI; empty for local builds.
 ARG VERSION=
+# The public URL is not baked in: the app takes the host from the Host header and
+# the scheme from Caddy's X-Forwarded-Proto (adapter-node's PROTOCOL_HEADER). Only
+# Caddy can reach the app (loopback + PROXY_SECRET), so these headers are trusted.
 ENV APP_VERSION=$VERSION \
+	PROTOCOL_HEADER=x-forwarded-proto \
 	NODE_ENV=production \
 	PORT=3000 \
 	DATABASE_PATH=/data/league.db

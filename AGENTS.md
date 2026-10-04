@@ -44,7 +44,7 @@ the config lives in `vite.config.ts`.
 ```sh
 pnpm install
 pnpm seed:sample 1
-DEV_USERS="sondre:admin,anna,bob" NOW_OVERRIDE="2026-10-04T10:00:00Z" pnpm dev
+DEV_USERS="sonhal:admin,anna,bob" NOW_OVERRIDE="2026-10-04T10:00:00Z" pnpm dev
 ```
 
 `DEV_USERS` fakes the Authelia headers (`?as=anna` switches user) and `NOW_OVERRIDE` pins the
