@@ -51,7 +51,7 @@
 			{#if form?.message}<p class="error">{form.message}</p>{/if}
 		</section>
 	{:else if data.state === 'playing'}
-		<Board board={data.board} {form} closesAt={data.closesAt} />
+		<Board board={data.board} {form} closesAt={data.closesAt} week={data.week} />
 	{/if}
 {/if}
 

@@ -10,8 +10,18 @@
 
 <h1>Stilling</h1>
 
+{#if data.liveWeek !== null}
+	<p class="muted live-note">
+		Inkluderer foreløpige resultater for <a href="/uke/{data.liveWeek}">uke {data.liveWeek}</a>, som
+		fortsatt er åpen. Bare de som er ferdige er med, så stillingen kan endre seg.
+	</p>
+{/if}
+
 {#if data.standings.length === 0}
-	<p class="muted">Ingen resultater ennå. Stillingen oppdateres når en uke stenger torsdag.</p>
+	<p class="muted">
+		Ingen resultater ennå. Stillingen oppdateres når en uke stenger torsdag, eller med en gang du
+		har spilt ukens oppgave.
+	</p>
 {:else}
 	<ol class="standings">
 		{#each data.standings as row, i (i)}
@@ -29,9 +39,12 @@
 							class="chip"
 							class:dropped={!w.counted}
 							class:missed={w.place === null}
-							title="Uke {w.week}{w.counted ? '' : ' (strøket)'}"
+							class:live={w.week === data.liveWeek}
+							title="Uke {w.week}{w.week === data.liveWeek ? ' (foreløpig)' : ''}{w.counted
+								? ''
+								: ' (strøket)'}"
 						>
-							<span class="wk">U{w.week}</span>
+							<span class="wk">U{w.week}{w.week === data.liveWeek ? '*' : ''}</span>
 							{formatPoints(w.points)}
 						</a>
 					{/each}
@@ -150,6 +163,14 @@
 
 	.chip.missed {
 		opacity: 0.7;
+	}
+
+	.chip.live {
+		outline: 1px dashed var(--muted);
+	}
+
+	.live-note a {
+		color: inherit;
 	}
 
 	.chip.dropped {

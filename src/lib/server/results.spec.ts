@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { openDatabase } from './db';
 import type { Puzzle } from './puzzle-schema';
 import { createRepo } from './repo';
-import { standingsAt } from './results';
+import { liveWeek, seasonWeeksFor, standingsAt, weekResults } from './results';
 
 const season = { start: '2026-10-04', weeks: 13 };
 
@@ -71,5 +71,61 @@ describe('countSeasonPlayers', () => {
 		expect(repo.countSeasonPlayers(1)).toBe(2); // the lurker never played
 		expect(repo.countSeasonPlayers(2)).toBe(2);
 		expect(repo.players()).toHaveLength(3);
+	});
+});
+
+describe('live results while a week is open', () => {
+	// Mon Oct 12: week 1 is closed, week 2 is open.
+	const mon = new Date('2026-10-12T10:00:00Z');
+
+	function withCarol() {
+		const ctx = setup();
+		const carol = ctx.repo.upsertPlayer('carol', 'Carol');
+		const w2 = ctx.repo.puzzleForWeek(2)!.id;
+		// Carol has started week 2 and solved two groups, but isn't done.
+		const a = ctx.repo.startAttempt(w2, carol.id, new Date('2026-10-12T09:00:00Z'));
+		ctx.repo.saveAttempt(a.id, {
+			groupsSolved: 2,
+			mistakes: 0,
+			guesses: [],
+			submissions: 2,
+			finishedAt: null
+		});
+		return { ...ctx, carol, w2 };
+	}
+
+	it('is available only to a player who has finished the open week', () => {
+		const { repo, anna, bob, carol, lurker } = withCarol();
+		expect(liveWeek(repo, season, mon, bob.id)?.week).toBe(2);
+		expect(liveWeek(repo, season, mon, anna.id)).toBeNull(); // not started
+		expect(liveWeek(repo, season, mon, carol.id)).toBeNull(); // mid-game
+		expect(liveWeek(repo, season, mon, lurker.id)).toBeNull();
+	});
+
+	it('is gone once the week is in review', () => {
+		const { repo, bob } = withCarol();
+		expect(liveWeek(repo, season, new Date('2026-10-15T10:00:00Z'), bob.id)).toBeNull();
+	});
+
+	it('ranks finished attempts only', () => {
+		const { repo, bob, w2 } = withCarol();
+		expect(weekResults(repo, w2, { finishedOnly: true }).map((r) => r.playerId)).toEqual([bob.id]);
+		expect(weekResults(repo, w2)).toHaveLength(2);
+	});
+
+	it('adds the open week to the standings for a finished viewer only', () => {
+		const { repo, anna, bob, carol } = withCarol();
+
+		const forBob = seasonWeeksFor(repo, season, mon, bob.id);
+		expect(forBob.liveWeek).toBe(2);
+		expect(forBob.weeks.map((w) => w.week)).toEqual([1, 2]);
+		// Carol is mid-game, so she is not part of week 2's results.
+		expect(forBob.weeks[1].results.map((r) => r.playerId)).toEqual([bob.id]);
+
+		for (const viewer of [anna, carol]) {
+			const s = seasonWeeksFor(repo, season, mon, viewer.id);
+			expect(s.liveWeek).toBeNull();
+			expect(s.weeks.map((w) => w.week)).toEqual([1]);
+		}
 	});
 });

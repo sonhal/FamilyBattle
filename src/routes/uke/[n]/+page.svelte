@@ -20,6 +20,7 @@
 
 <h1>
 	Uke {data.week}
+	{#if data.live}<span class="badge live">Foreløpig</span>{/if}
 	{#if data.voided}<span class="badge">Annullert</span>{/if}
 </h1>
 
@@ -27,11 +28,18 @@
 	<p class="muted">Denne uken teller ikke i sesongen.</p>
 {/if}
 
-<section class="groups">
-	{#each data.groups as g (g.category)}
-		<GroupRow group={g} />
-	{/each}
-</section>
+{#if data.live}
+	<p class="muted">
+		Uka er fortsatt åpen. Listen viser alle som er ferdige så langt, og plassene kan endre seg.
+		Svarene og den endelige listen kommer <LocalTime iso={data.revealsAt} />.
+	</p>
+{:else}
+	<section class="groups">
+		{#each data.groups as g (g.category)}
+			<GroupRow group={g} />
+		{/each}
+	</section>
+{/if}
 
 <h2>Resultater</h2>
 {#if data.ranking.length === 0}
@@ -56,28 +64,35 @@
 	</ol>
 {/if}
 
-<section class="vote">
-	<h2>Var oppgaven dårlig?</h2>
-	{#if data.vote.allowed}
-		<p class="muted">
-			Stem hvis et ord passet i flere grupper eller oppgaven var ødelagt. Du kan endre stemmen til <LocalTime
-				iso={data.vote.locksAt}
-			/>.
-		</p>
-		<form method="POST" action="?/vote" use:enhance>
-			<button name="vote" value="bad" class:chosen={data.vote.mine === true}>Ja, dårlig</button>
-			<button name="vote" value="fine" class:chosen={data.vote.mine === false}>Nei, grei</button>
-		</form>
-		{#if data.vote.mine !== null}
-			<p class="small">Din stemme: {data.vote.mine ? 'dårlig' : 'grei'}.</p>
+{#if data.live && data.playing.length > 0}
+	<h2>Spiller nå</h2>
+	<p class="muted">{data.playing.join(', ')}</p>
+{/if}
+
+{#if !data.live}
+	<section class="vote">
+		<h2>Var oppgaven dårlig?</h2>
+		{#if data.vote.allowed}
+			<p class="muted">
+				Stem hvis et ord passet i flere grupper eller oppgaven var ødelagt. Du kan endre stemmen til <LocalTime
+					iso={data.vote.locksAt}
+				/>.
+			</p>
+			<form method="POST" action="?/vote" use:enhance>
+				<button name="vote" value="bad" class:chosen={data.vote.mine === true}>Ja, dårlig</button>
+				<button name="vote" value="fine" class:chosen={data.vote.mine === false}>Nei, grei</button>
+			</form>
+			{#if data.vote.mine !== null}
+				<p class="small">Din stemme: {data.vote.mine ? 'dårlig' : 'grei'}.</p>
+			{/if}
+			{#if form?.message}<p class="error">{form.message}</p>{/if}
+		{:else if !data.vote.open}
+			<p class="muted">Avstemningen er stengt.</p>
+		{:else}
+			<p class="muted">Bare de som har spilt uke {data.week} kan stemme.</p>
 		{/if}
-		{#if form?.message}<p class="error">{form.message}</p>{/if}
-	{:else if !data.vote.open}
-		<p class="muted">Avstemningen er stengt.</p>
-	{:else}
-		<p class="muted">Bare de som har spilt uke {data.week} kan stemme.</p>
-	{/if}
-</section>
+	</section>
+{/if}
 
 <style>
 	.weeks {
@@ -109,6 +124,11 @@
 		border-radius: 999px;
 		background: #dc2626;
 		color: #fff;
+	}
+
+	.badge.live {
+		background: var(--accent);
+		color: var(--accent-fg);
 	}
 
 	.groups {

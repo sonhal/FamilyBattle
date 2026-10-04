@@ -8,8 +8,12 @@
 
 	type FormResult = { result?: string; message?: string } | null | undefined;
 
-	let { board, form, closesAt }: { board: BoardView; form: FormResult; closesAt: string } =
-		$props();
+	let {
+		board,
+		form,
+		closesAt,
+		week
+	}: { board: BoardView; form: FormResult; closesAt: string; week: number } = $props();
 
 	let selected = $state<string[]>([]);
 	let localOrder = $state<string[] | null>(null);
@@ -74,8 +78,11 @@
 		{#if board.grid}
 			<div class="emoji"><GuessGrid grid={board.grid} label="Dine gjetninger" /></div>
 		{/if}
+		<p><a class="results" href="/uke/{week}">Se resultatene så langt</a></p>
 		<p class="muted">
-			Resultater og stilling vises når spillet stenger, <LocalTime iso={closesAt} />.
+			Listen oppdateres etter hvert som andre blir ferdige. Svarene og den endelige listen kommer <LocalTime
+				iso={closesAt}
+			/>.
 		</p>
 	</section>
 {:else}
@@ -235,5 +242,15 @@
 	.muted {
 		color: var(--muted);
 		font-size: 0.9rem;
+	}
+
+	.results {
+		display: inline-block;
+		padding: 12px 28px;
+		border-radius: 999px;
+		background: var(--accent);
+		color: var(--accent-fg);
+		font-weight: 700;
+		text-decoration: none;
 	}
 </style>
