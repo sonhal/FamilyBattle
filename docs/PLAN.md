@@ -23,10 +23,16 @@ gameplay, scoring, voting, data model) are not repeated here; this plan covers h
 Defaults for the concept doc's remaining open items. Scoring is derived on read, so any of these can
 change later without a data migration:
 
-- Season tiebreaker: most weekly wins, then best single week, then shared.
-- No final-week multiplier and no dropped worst weeks.
+- App name shown to players: **Ordkampen**.
+- Each player's **2 worst weeks are dropped**: the season total is the best
+  `13 − voided − 2` weeks. Until a player has more weeks than that, all weeks count, so the drop
+  only changes totals from week 12 on.
+- Season tiebreaker: most weekly wins, then best single week, **over counted weeks only**, then shared.
+- No final-week multiplier.
+- "N av M har spilt": M is the number of players with at least one attempt this season.
 - A voided week shortens the season. A reserve puzzle can be scheduled as a bonus week if the family wants one.
-- No notifications in v1. A WhatsApp message from the admin does the job.
+- No notifications. The admin posts in the family chat.
+- No service worker for now.
 
 ## Season calendar
 
