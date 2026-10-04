@@ -29,7 +29,9 @@ change later without a data migration:
   only changes totals from week 12 on.
 - Season tiebreaker: most weekly wins, then best single week, **over counted weeks only**, then shared.
 - No final-week multiplier.
-- "N av M har spilt": M is the number of players with at least one attempt this season.
+- "N av M har spilt": N is the players who have started this week's puzzle, M is every player who
+  has logged in (only league members get past the group check; the admin plays and counts).
+  Counting only players with an attempt this season made week 1 always read "N av N".
 - A voided week shortens the season. A reserve puzzle can be scheduled as a bonus week if the family wants one.
 - No notifications. The admin posts in the family chat.
 - No service worker for now.
