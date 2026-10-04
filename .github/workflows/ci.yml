@@ -1,28 +1,30 @@
 name: CI
 
+# Release flow (adapted from sonhal/nyttig):
+#   PR / push to main   verify + build both images (nothing is published)
+#   green push to main  Tag job: if the Conventional Commits since the last
+#                       release ask for one (scripts/next-version.sh), tag
+#                       vX.Y.Z and dispatch this workflow on the tag
+#   v* tag              verify + publish the images to GHCR with provenance,
+#                       then a GitHub Release with generated notes
+
 on:
   push:
-    branches: ['**']
+    branches: [main]
     tags: ['v*']
   pull_request:
+  # Also how the Tag job starts the release run for the tag it pushes.
   workflow_dispatch:
 
-# Least privilege by default; the docker job widens this for GHCR only.
+# Least privilege by default; jobs widen this where they need to.
 permissions:
   contents: read
 
+# Cancel superseded runs on the same PR, but never on main or a tag, so every
+# commit there gets a complete result.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
-env:
-  REGISTRY: ghcr.io
-  # Images are published only from the default branch and from v* tags.
-  PUBLISH: >-
-    ${{ github.event_name != 'pull_request' && (
-      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) ||
-      startsWith(github.ref, 'refs/tags/v')
-    ) }}
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref_type != 'tag' }}
 
 jobs:
   verify:
@@ -62,14 +64,13 @@ jobs:
       - name: Build
         run: pnpm build
 
-  docker:
-    name: Docker image (${{ matrix.image }})
+  # Built on every run so a broken Dockerfile fails the PR. On a tag run this
+  # build stamps the same VERSION, so publish-images rebuilds from its cache.
+  images:
+    name: Image (${{ matrix.image }})
     needs: verify
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    permissions:
-      contents: read
-      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -82,38 +83,152 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
+      - name: docker build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          target: ${{ matrix.target }}
+          platforms: linux/amd64
+          build-args: |
+            VERSION=${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          push: false
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}
+
+  # Runs on pushes to main once everything else has passed. If the commits
+  # since the last release ask for one, it tags this commit and starts the
+  # release. A tag pushed with GITHUB_TOKEN doesn't trigger workflows, so the
+  # job dispatches this workflow on the new tag (workflow_dispatch is the one
+  # event GITHUB_TOKEN may start); that run has github.ref = refs/tags/vX.Y.Z.
+  tag:
+    name: Tag release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [verify, images]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    # One at a time, so two quick merges can't compute the same version.
+    concurrency:
+      group: ${{ github.workflow }}-tag
+      cancel-in-progress: false
+    permissions:
+      contents: write # push the tag
+      actions: write # dispatch the release run
+    steps:
+      - name: Check out (full history and tags)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Compute version
+        id: version
+        run: |
+          # Already released: tagged by hand, or a later commit's run got here
+          # first and its tag covers this commit.
+          if released=$(git tag --contains HEAD --list 'v*' | head -n 1) && [ -n "$released" ]; then
+            echo "Already released in $released"
+            exit 0
+          fi
+          version=$(scripts/next-version.sh)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "### Release: ${version:-none}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Push tag and start release
+        if: steps.version.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a "$TAG" -m "$TAG"
+          git push origin "refs/tags/$TAG"
+          gh workflow run ci.yml --ref "$TAG"
+
+  # v* tags only, after everything else has passed: pushes
+  # ghcr.io/<owner>/<image>:<version> (plus <major>.<minor> and latest for a
+  # stable release) with a signed build provenance attestation:
+  #   gh attestation verify oci://ghcr.io/sonhal/familybattle:0.1.0 --repo sonhal/FamilyBattle
+  publish-images:
+    name: Publish image (${{ matrix.image }})
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [verify, images]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write # push to ghcr.io
+      id-token: write # sign the build provenance attestation
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: familybattle
+            target: app
+          - image: familybattle-tools
+            target: tools
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+    steps:
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
       - name: Log in to GHCR
-        if: env.PUBLISH == 'true'
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ github.token }}
 
+      # v0.1.0 → 0.1.0, 0.1 and latest; a pre-release (a hyphen) gets only its
+      # full version. The tag is passed explicitly because this run is usually
+      # a workflow_dispatch from the Tag job.
       - name: Image metadata
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
+          images: ${{ env.IMAGE }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha
+            type=semver,pattern={{version}},value=${{ github.ref_name }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ github.ref_name }}
 
-      - name: Build${{ env.PUBLISH == 'true' && ' and push' || '' }}
+      - name: Build and push
+        id: push
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
-          # Git context: builds exactly the checked-out commit.
           target: ${{ matrix.target }}
           platforms: linux/amd64
-          push: ${{ env.PUBLISH == 'true' }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
-          provenance: mode=max
           sbom: true
           cache-from: type=gha,scope=${{ matrix.target }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.target }}
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+  release:
+    name: GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [publish-images]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write # create the release
+    steps:
+      # A tag with a hyphen (v0.2.0-rc.1) is marked as a pre-release.
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          prerelease=()
+          if [[ "$TAG" == *-* ]]; then prerelease=(--prerelease); fi
+          gh release create "$TAG" --verify-tag --title "$TAG" --generate-notes "${prerelease[@]}"

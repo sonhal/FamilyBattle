@@ -12,6 +12,7 @@ function list(value: string | undefined): string[] {
 
 export const config = {
 	databasePath: env.DATABASE_PATH ?? './data/league.db',
+	version: env.APP_VERSION || 'dev',
 
 	// Forward-auth headers set by Caddy from Authelia's response.
 	userHeader: (env.AUTH_USER_HEADER ?? 'Remote-User').toLowerCase(),

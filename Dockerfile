@@ -35,7 +35,10 @@ RUN APP_ORIGIN=$APP_ORIGIN pnpm build
 
 # ---- app: what runs behind Caddy ----
 FROM node:22-bookworm-slim AS app
-ENV NODE_ENV=production \
+# Release version (v0.1.0) stamped by CI; empty for local builds.
+ARG VERSION=
+ENV APP_VERSION=$VERSION \
+	NODE_ENV=production \
 	PORT=3000 \
 	DATABASE_PATH=/data/league.db
 WORKDIR /app
@@ -46,4 +49,6 @@ RUN mkdir -p /data && chown node:node /data
 USER node
 VOLUME /data
 EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
+	CMD ["node", "-e", "fetch('http://127.0.0.1:3000/healthz').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
 CMD ["node", "build"]
