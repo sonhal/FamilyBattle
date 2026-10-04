@@ -267,7 +267,8 @@ See `docs/DEPLOY.md` for the step-by-step runbook.
 CI (`.github/workflows/ci.yml`): lint, type check, unit tests and build, then both images, on
 every PR and push to `main`. Releases follow nyttig: a green push to `main` whose Conventional
 Commits ask for a release is tagged `vX.Y.Z` by CI, and the tag run publishes the images to GHCR
-and creates a GitHub Release (`AGENTS.md` → Releases).
+and creates a GitHub Release (`AGENTS.md` → Releases). The tag is baked into the image as
+`APP_VERSION`; `/healthz` reports it and every page shows it, faintly, in the footer.
 
 - Multi-stage `Dockerfile`. The `base` stage uses `node:22-bookworm` (it has the compilers
   better-sqlite3 needs) plus a global pnpm. `prod-deps` installs runtime dependencies only. `tools` adds the source for the CLI scripts. `app` is

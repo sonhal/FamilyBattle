@@ -36,7 +36,8 @@ CI publishes images only for release tags `vX.Y.Z` (see `AGENTS.md` → Releases
 | `ghcr.io/sonhal/familybattle-tools` | the CLI (generator, `sql`, `backup`) |
 
 Each release is tagged `X.Y.Z`, `X.Y` and `latest`. Pin `FAMILYBATTLE_VERSION=X.Y.Z` in `.env`
-and upgrade on purpose. The running version is shown by `curl -s http://127.0.0.1:7080/healthz`.
+and upgrade on purpose. The running version is shown by `curl -s http://127.0.0.1:7080/healthz`
+and in the footer of every page (`dev` for local builds).
 Release notes: <https://github.com/sonhal/FamilyBattle/releases>.
 
 Verify an image's provenance (optional):
