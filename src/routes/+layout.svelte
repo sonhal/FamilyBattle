@@ -36,6 +36,8 @@
 	{@render children()}
 </main>
 
+<footer>Ordkampen {data.version}</footer>
+
 <style>
 	:global(:root) {
 		--bg: #f7f7f5;
@@ -133,5 +135,15 @@
 		max-width: 560px;
 		margin: 0 auto;
 		padding: 16px;
+	}
+
+	footer {
+		max-width: 560px;
+		margin: 0 auto;
+		padding: 24px 16px 16px;
+		text-align: center;
+		color: var(--muted);
+		font-size: 0.75rem;
+		opacity: 0.6;
 	}
 </style>
