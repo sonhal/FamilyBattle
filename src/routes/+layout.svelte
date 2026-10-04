@@ -24,6 +24,9 @@
 		<a href="/stilling" aria-current={page.url.pathname === '/stilling' ? 'page' : undefined}
 			>Stilling</a
 		>
+		{#if data.player.isAdmin}
+			<a href="/admin" aria-current={page.url.pathname === '/admin' ? 'page' : undefined}>Admin</a>
+		{/if}
 	</nav>
 	<span class="who">{data.player.name}</span>
 </header>
@@ -85,6 +88,8 @@
 
 	header {
 		display: flex;
+		flex-wrap: wrap;
+		row-gap: 4px;
 		justify-content: space-between;
 		align-items: baseline;
 		max-width: 560px;

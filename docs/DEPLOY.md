@@ -224,9 +224,9 @@ curl -s http://127.0.0.1:7080/healthz        # ok vX.Y.Z
 
 ## Day-to-day operations
 
-| Task                                      | Command                                                                                                  |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Logs                                      | `docker compose logs -f familybattle`                                                                    |
-| Inspect data                              | `docker compose run --rm tools sql "SELECT * FROM players"`                                              |
-| Void week N (until the admin page exists) | `docker compose run --rm tools sql "UPDATE puzzles SET status='voided', void_note='<why>' WHERE week=N"` |
-| Regenerate an unplayed week               | `ANTHROPIC_API_KEY=... docker compose run --rm tools generate --replace N --quiet`                       |
+| Task                        | Command                                                                                   |
+| --------------------------- | ----------------------------------------------------------------------------------------- |
+| Logs                        | `docker compose logs -f familybattle`                                                     |
+| Inspect data                | `docker compose run --rm tools sql "SELECT * FROM players"`                               |
+| Void or restore a week      | `https://battle.example.com/admin` (members of `familybattle-admin`), after play has closed |
+| Regenerate an unplayed week | `ANTHROPIC_API_KEY=... docker compose run --rm tools generate --replace N --quiet`        |
