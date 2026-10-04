@@ -28,6 +28,13 @@ function devHeaders(event: Parameters<Handle>[0]['event']): Headers {
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
+	// Liveness for Docker's healthcheck and deploy checks. Reveals only the version.
+	if (event.url.pathname === '/healthz') {
+		return new Response(`ok ${config.version}\n`, {
+			headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }
+		});
+	}
+
 	const headers = dev ? devHeaders(event) : event.request.headers;
 	const identity = resolveIdentity(headers, config);
 
