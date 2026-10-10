@@ -13,14 +13,15 @@
 {#if data.liveWeek !== null}
 	<p class="muted live-note">
 		Inkluderer foreløpige resultater for <a href="/uke/{data.liveWeek}">uke {data.liveWeek}</a>, som
-		fortsatt er åpen. Bare de som er ferdige er med, så stillingen kan endre seg.
+		fortsatt er åpen: oppgavene du har fullført, og bare de som er ferdige med dem. Stillingen kan
+		endre seg.
 	</p>
 {/if}
 
 {#if data.standings.length === 0}
 	<p class="muted">
-		Ingen resultater ennå. Stillingen oppdateres når en uke stenger torsdag, eller med en gang du
-		har spilt ukens oppgave.
+		Ingen resultater ennå. Stillingen oppdateres når en uke stenger, eller med en gang du har
+		fullført en oppgave.
 	</p>
 {:else}
 	<ol class="standings">
@@ -56,14 +57,17 @@
 
 <section class="rules muted">
 	<p>
-		Plasspoeng hver uke: 10, 7, 5, 4, 3, 2, 1. Likt resultat deler poengene. En uke du ikke spiller
-		gir 0.
+		Plasspoeng for hver oppgave: 10, 7, 5, 4, 3, 2, 1. Likt resultat deler poengene. Ukepoengene er
+		snittet over ukens oppgaver, og en oppgave du ikke spiller gir 0.
 	</p>
 	<p>
 		Bare de {data.countedWeeks} beste ukene av {data.seasonWeeks} teller. Før du har spilt flere uker
 		enn det, teller alle. Strøkne uker er gjennomstreket. Ved likt totalt avgjør flest seire, deretter
 		beste enkeltuke, blant ukene som teller.
 	</p>
+	{#if data.voidedPuzzles.length > 0}
+		<p>Annullerte oppgaver (uke.oppgave): {data.voidedPuzzles.join(', ')}.</p>
+	{/if}
 	{#if data.weeks.some((w) => w.voided)}
 		<p>
 			Annullerte uker:

@@ -24,34 +24,79 @@
 		{/if}
 	</div>
 
+	{#if data.state !== 'review' && data.slots.length > 1}
+		<nav class="slots" aria-label="Ukens oppgaver">
+			{#each data.slots as s (s.slot)}
+				{#if s.state === 'upcoming'}
+					<span class="slot upcoming">
+						<span class="day">{s.day}</span>
+						<span class="status">Kommer</span>
+					</span>
+				{:else}
+					<a
+						class="slot"
+						href="/?oppgave={s.slot}"
+						aria-current={s.slot === data.slot ? 'page' : undefined}
+					>
+						<span class="day">{s.day}</span>
+						<span class="status" class:new={s.state === 'new'}>
+							{#if s.state === 'new'}Ny{:else if s.state === 'playing'}Påbegynt{:else if s.state === 'finished'}Ferdig
+								✓{:else}Mangler{/if}
+						</span>
+					</a>
+				{/if}
+			{/each}
+		</nav>
+	{/if}
+
+	{#if data.state !== 'review' && data.resultsWeek !== null}
+		<p class="results-note">
+			<a href="/uke/{data.resultsWeek}">Svarene for uke {data.resultsWeek} er klare →</a>
+		</p>
+	{/if}
+
 	{#if data.state === 'missing'}
 		<section class="notice">
 			<h1>Ingen oppgave ennå</h1>
-			<p>Ukens oppgave er ikke klar. Si fra til admin.</p>
+			<p>Denne oppgaven er ikke klar. Si fra til admin.</p>
 		</section>
 	{:else if data.state === 'review'}
 		<section class="notice">
 			<h1>Uke {data.week} er ferdigspilt</h1>
 			<p><a class="primary" href="/uke/{data.week}">Se resultatene</a></p>
 			<p><a href="/stilling">Sesongstilling</a></p>
-			<p class="small">Neste oppgave åpner <LocalTime iso={data.nextOpensAt} />.</p>
+			{#if data.nextOpensAt}
+				<p class="small">Neste oppgave åpner <LocalTime iso={data.nextOpensAt} />.</p>
+			{/if}
 		</section>
 	{:else if data.state === 'not_started'}
 		<section class="notice">
-			<h1>Uke {data.week}</h1>
+			<h1>
+				Uke {data.week}{#if data.slots.length > 1}, oppgave {data.slot} av {data.slots.length}{/if}
+			</h1>
 			<p>16 ord, 4 skjulte grupper, 4 feil tillatt. Ett forsøk.</p>
 			<p>Åpen til <LocalTime iso={data.closesAt} minusMinute />.</p>
 			<p class="small">
 				Tiden starter når du trykker Start. Den brukes bare ved likt resultat.
 				<a href="/om">Slik spiller du</a>
 			</p>
-			<form method="POST" action="?/start" use:enhance>
+			<form method="POST" action="?/start&oppgave={data.slot}" use:enhance>
 				<button class="primary">Start</button>
 			</form>
 			{#if form?.message}<p class="error">{form.message}</p>{/if}
 		</section>
 	{:else if data.state === 'playing'}
-		<Board board={data.board} {form} closesAt={data.closesAt} week={data.week} />
+		<!-- A fresh board per puzzle: local selection and shuffle order belong to one puzzle. -->
+		{#key data.slot}
+			<Board
+				board={data.board}
+				{form}
+				closesAt={data.closesAt}
+				week={data.week}
+				slot={data.slot}
+				multi={data.slots.length > 1}
+			/>
+		{/key}
 	{/if}
 {/if}
 
@@ -62,6 +107,54 @@
 		color: var(--muted);
 		font-size: 0.9rem;
 		margin-bottom: 12px;
+	}
+
+	.slots {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+		gap: 6px;
+		margin-bottom: 12px;
+	}
+
+	.slot {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		padding: 6px 4px;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		text-decoration: none;
+		font-size: 0.9rem;
+	}
+
+	.slot[aria-current='page'] {
+		border-color: var(--fg);
+		font-weight: 700;
+	}
+
+	.slot.upcoming {
+		color: var(--muted);
+		border-style: dashed;
+	}
+
+	.slot .status {
+		font-size: 0.75rem;
+		color: var(--muted);
+		font-weight: 400;
+	}
+
+	.slot .status.new {
+		padding: 0 6px;
+		border-radius: 999px;
+		background: #dc2626;
+		color: #fff;
+		font-weight: 700;
+	}
+
+	.results-note {
+		margin: 0 0 12px;
+		font-size: 0.9rem;
+		text-align: center;
 	}
 
 	.notice {

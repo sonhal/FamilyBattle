@@ -23,17 +23,17 @@ through Authelia; Caddy's `forward_auth` passes `Remote-User` / `Remote-Name` /
 `Remote-Groups`, and `src/hooks.server.ts` fails closed without them. Puzzles come from
 `scripts/generate-puzzles.ts` (Claude API).
 
-| Path                                        | What                                                                        |
-| ------------------------------------------- | --------------------------------------------------------------------------- |
-| `src/lib/server/schedule.ts`                | Season calendar (Europe/Oslo): open Sun–Wed, review Thu–Sat                 |
-| `src/lib/server/game.ts`                    | Guess evaluation (pure)                                                     |
-| `src/lib/server/scoring.ts`                 | Weekly ranking, points, season standings (pure, derived on read)            |
-| `src/lib/server/views.ts`                   | The only builder of board data sent to the browser (no answers)             |
-| `src/lib/server/repo.ts`, `db.ts`           | All SQL; migrations are embedded in `db.ts` and append-only                 |
-| `src/lib/server/puzzle-*.ts`                | Puzzle validation and the independent review pass                           |
-| `src/routes/`                               | `/` play, `/uke/[n]` results and voting, `/stilling` standings, `/om` about |
-| `scripts/`                                  | Generator, `sql`, `backup`, `seed-sample`, `next-version.sh`                |
-| `docs/PLAN.md`, `DEPLOY.md`, `VPS-AGENT.md` | Design decisions, runbook, instructions for the VPS agent                   |
+| Path                                        | What                                                                   |
+| ------------------------------------------- | ---------------------------------------------------------------------- |
+| `src/lib/server/schedule.ts`                | Season calendar (Europe/Oslo): Mon/Wed/Fri drops, play until Sun 23:59 |
+| `src/lib/server/game.ts`                    | Guess evaluation (pure)                                                |
+| `src/lib/server/scoring.ts`                 | Weekly ranking, points, season standings (pure, derived on read)       |
+| `src/lib/server/views.ts`                   | The only builder of board data sent to the browser (no answers)        |
+| `src/lib/server/repo.ts`, `db.ts`           | All SQL; migrations are embedded in `db.ts` and append-only            |
+| `src/lib/server/puzzle-*.ts`                | Puzzle validation and the independent review pass                      |
+| `src/routes/`                               | `/` play, `/uke/[n]/[p]` results and voting, `/stilling`, `/om` about  |
+| `scripts/`                                  | Generator, `sql`, `backup`, `seed-sample`, `next-version.sh`           |
+| `docs/PLAN.md`, `DEPLOY.md`, `VPS-AGENT.md` | Design decisions, runbook, instructions for the VPS agent              |
 
 SvelteKit 3 specifics: imports use `#lib/...` with the `.ts` extension (`$lib` is gone),
 `$app/env` replaces `$app/environment`, the `Handle` type comes from `@sveltejs/kit/hooks`, and
@@ -43,8 +43,8 @@ the config lives in `vite.config.ts`.
 
 ```sh
 pnpm install
-pnpm seed:sample 1
-DEV_USERS="sonhal:admin,anna,bob" NOW_OVERRIDE="2026-10-04T10:00:00Z" pnpm dev
+pnpm seed:sample 3
+DEV_USERS="sonhal:admin,anna,bob" NOW_OVERRIDE="2026-10-21T10:00:00Z" pnpm dev
 ```
 
 `DEV_USERS` fakes the Authelia headers (`?as=anna` switches user) and `NOW_OVERRIDE` pins the
@@ -75,7 +75,8 @@ step: push `v1.0.0` by hand.
 ## Working in the Claude cloud sandbox
 
 - npm 10 crashes on this dependency tree (`reading 'edgesOut'`); use pnpm.
-- `pkill -f "vite dev"` matches and kills your own shell. Use `pkill -f "[v]ite dev"`.
+- `pkill -f "vite dev"` matches and kills your own shell, and the server itself runs as
+  `vite.js dev`. Use `pkill -f "[v]ite.js dev"`.
 - `ss` isn't installed.
 - The git proxy refuses branch deletion; ask the owner to delete merged branches.
 - Docker works after starting `dockerd`, but image builds need the sandbox CA and proxy:

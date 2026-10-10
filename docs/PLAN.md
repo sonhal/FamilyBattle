@@ -19,50 +19,67 @@ gameplay, scoring, voting, data model) are not repeated here; this plan covers h
 | Timezone | `Europe/Oslo` for all phase boundaries (Luxon); each player sees deadlines in their own local time     |
 | Puzzles  | A CLI script generates all 13 weeks plus 2 reserves up front with the Claude API, run by the VPS agent |
 | Launch   | Week 1 opens **Sun Oct 4, 00:00 Oslo**, so features ship in stages (see Milestones)                    |
+| Rhythm   | **Three puzzles a week from week 3**: Mon/Wed/Fri drops, all open until Sunday 23:59 (see calendar)    |
 
 Defaults for the concept doc's remaining open items. Scoring is derived on read, so any of these can
 change later without a data migration:
 
 - App name shown to players: **Ordkampen**.
+- **Three puzzles a week, averaged.** One puzzle a week left too long a gap, so from week 3 a
+  week has three. Each puzzle is ranked on its own with the usual points; the week's points are
+  the **average** over its puzzles, and a missed puzzle counts as 0. Weeks 1–2 (one puzzle) and
+  weeks 3–13 are then worth the same, so the drop and tiebreak rules below are unchanged. A
+  weekly win is the best average that week.
 - Each player's **2 worst weeks are dropped**: the season total is the best
   `13 − voided − 2` weeks. Until a player has more weeks than that, all weeks count, so the drop
   only changes totals from week 12 on.
 - Season tiebreaker: most weekly wins, then best single week, **over counted weeks only**, then shared.
 - No final-week multiplier.
-- "N av M har spilt": N is the players who have started this week's puzzle, M is every player who
+- "N av M har spilt": N is the players who have started the puzzle on screen, M is every player who
   has logged in (only league members get past the group check; the admin plays and counts).
   Counting only players with an attempt this season made week 1 always read "N av N".
-- A voided week shortens the season. A reserve puzzle can be scheduled as a bonus week if the family wants one.
-- No notifications. The admin posts in the family chat.
+- Voiding is per puzzle. A voided puzzle leaves the week's average; a week whose puzzles are all
+  voided shortens the season. A reserve puzzle can be scheduled as a bonus week if the family wants one.
+- No notifications. The admin posts in the family chat. Inside the app, a red **"Ny"** badge on
+  "Spill" and on the puzzle tabs marks dropped puzzles the player hasn't started (derived from
+  attempts, nothing stored).
 - No service worker for now.
-- **Live results for finished players.** While a week is open, a player who has finished it sees
-  a provisional ranking on `/uke/[n]` (place, points, groups, mistakes, time, colour grid) and a
-  provisional column for the week in `/stilling`. Only finished attempts are ranked; players
-  still mid-game are listed as "spiller nå" with no progress shown. The words and categories
-  stay hidden until Thursday, and voting opens with the review phase as before. Anyone who
-  hasn't finished gets a 404, so nobody sees a target before they play. Pages refresh on load
-  only.
+- **Live results for finished players.** While a week is open, a player who has finished a
+  puzzle sees a provisional ranking for it on `/uke/[n]/[p]` (place, points, groups, mistakes,
+  time, colour grid), a provisional week ranking on `/uke/[n]` and a provisional column for the
+  week in `/stilling`, all built only from the puzzles they have finished. Only finished
+  attempts are ranked; players still mid-game are listed as "spiller nå" with no progress
+  shown. The words and categories stay hidden until the week closes, and voting opens with the
+  review phase. Anyone who hasn't finished a puzzle gets a 404 for it, so nobody sees a target
+  before they play. Pages refresh on load only.
 - An "Om spillet" page (`/om`, linked in the header) explains the game, the week and the season.
   Its dates and point values come from the season config and `scoring.ts`, so it can't drift.
-  The final week's results are revealed Thu Dec 31: the game ends on New Year's Eve and the winner
+  The final week's results are revealed Thu Dec 31 at 16:00: the game ends on New Year's Eve and the winner
   is announced at the family's New Year's dinner.
 
 ## Season calendar
 
-Week `n` (1–13) opens on `2026-10-04 + 7·(n-1)` days at 00:00 Oslo time.
+Weeks 1–2 (`SEASON_SINGLE_WEEKS=2`) kept the launch format: one puzzle, opening Sunday
+`2026-10-04 + 7·(n-1)` days at 00:00 Oslo time. From week 3 a week starts on the Monday after
+that Sunday and has three puzzles (slots 1–3).
 
-| Phase  | Start          | End (exclusive) |
-| ------ | -------------- | --------------- |
-| open   | Sun 00:00      | Thu 00:00       |
-| review | Thu 00:00      | next Sun 00:00  |
-| closed | next Sun 00:00 | —               |
+| Week        | Puzzles drop (00:00) | Play closes, answers revealed | Voting locks             |
+| ----------- | -------------------- | ----------------------------- | ------------------------ |
+| 1–2         | Sun                  | Thu 00:00                     | when the next week opens |
+| 3–12        | Mon, Wed, Fri        | next Mon 00:00                | a week later (next Mon)  |
+| 13 (finale) | Mon, Tue, Wed        | **Thu Dec 31 16:00**          | a week later             |
 
-- The phase is **computed** from `week` and the current time, never stored. `schedule.ts` exposes
-  `phaseOf(week, now)` and `currentWeek(now)`.
+- Every puzzle in a week stays open until the week closes, so the Friday puzzle gets the weekend.
+- The phases (`upcoming`, `open`, `review`, `closed`) are per week and **computed** from the week
+  and the current time, never stored. A week's review overlaps the next week's play; the open
+  week wins in `currentWeek(now)`. A puzzle is playable when it has dropped and its week is open
+  (`isPlayable`).
+- Week 2's review runs Thu Oct 15 – Mon Oct 19, one day longer than before, and week 3 opens Mon
+  Oct 19. Week 13 opens Mon Dec 28 and closes on New Year's Eve at 16:00, so the winner is known
+  before dinner.
 - DST: Norway leaves summer time on Sun Oct 25 at 03:00. The 00:00 boundaries are unaffected,
   and Luxon handles the offset.
-- Week 13 opens Dec 27 and its review ends Sun Jan 3. The concept doc says "final week closes Wed
-  Dec 30", which is the end of the _open_ phase. Standings are final once week 13's review ends.
+- A new season that starts on a Monday sets `SEASON_SINGLE_WEEKS=0`.
 - Testing: a `NOW_OVERRIDE` env var (ignored when `NODE_ENV=production`) lets you check each phase locally.
 
 ## Architecture
@@ -86,9 +103,10 @@ src/
   lib/server/repo.ts         all SQL in one place
   lib/server/views.ts        the only place client page data for the board is built (tested for leaks)
   routes/
-    +page.server.ts / +page.svelte        this week: board, or "played: 4 of 6" while open
-    week/[n]/+page.server.ts / .svelte    review: answers, weekly ranking, your vote
-    standings/+page.server.ts / .svelte   season table
+    +page.server.ts / +page.svelte        this week: puzzle tabs (?oppgave=N) and the board
+    uke/[n]/+page.server.ts / .svelte     a week: average-points ranking, links to its puzzles
+    uke/[n]/[p]/+page.server.ts / .svelte one puzzle: answers, ranking, your vote
+    stilling/+page.server.ts / .svelte    season table
     om/+page.server.ts / .svelte          "Om spillet": rules, weekly rhythm, season finale
     admin/+page.server.ts / .svelte       vote totals, void/unvoid
 scripts/generate-puzzles.ts  puzzle generator (Claude API)
@@ -118,11 +136,14 @@ CREATE TABLE players (
 
 CREATE TABLE puzzles (
   id         INTEGER PRIMARY KEY,
-  week       INTEGER UNIQUE,              -- 1..13; NULL = reserve
+  week       INTEGER,                     -- 1..13; NULL = reserve
+  slot       INTEGER CHECK (slot >= 1),   -- 1..3 within the week; NULL = reserve
   groups     TEXT NOT NULL,               -- JSON: [{category, color, words[4]}] x4
   status     TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','voided')),
   void_note  TEXT,                        -- why it was voided, fed back into generation
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (week, slot),
+  CHECK ((week IS NULL) = (slot IS NULL))
 );
 
 CREATE TABLE attempts (
@@ -145,6 +166,10 @@ CREATE TABLE puzzle_votes (
   PRIMARY KEY (puzzle_id, player_id)
 );
 ```
+
+Migration 2 added `slot` by rebuilding `puzzles` (SQLite can't drop the old `UNIQUE (week)`);
+existing puzzles became slot 1 and kept their ids. Foreign keys are switched off while
+migrating and checked with `foreign_key_check` before each migration commits.
 
 `groups_solved` and `mistakes` are denormalized from `guesses` to keep queries simple. They are
 written in the same transaction, and a `recount` admin script can rebuild them from `guesses` if a
@@ -193,7 +218,8 @@ hand edit gets them out of sync.
 **`?/guess` action.** Everything below runs in one `db.transaction`. better-sqlite3 is synchronous, so
 double-taps are serialized for free.
 
-1. Phase must be `open`, the attempt must exist and be unfinished, and the guess must be exactly 4 distinct words, all among the remaining words.
+1. The puzzle named by `?oppgave=N` must be playable (dropped, week open: `isPlayable`; a
+   puzzle that hasn't dropped is never loaded), the attempt must exist and be unfinished, and the guess must be exactly 4 distinct words, all among the remaining words.
 2. Normalize the guess into a sorted lowercase key. If that key is already in `guesses`, return `already_guessed` with no cost.
 3. Evaluate it with `game.evaluate(groups, words)`: `correct`, `one_away` (3 in one group), or `wrong`.
 4. Append to `guesses` and update the counters. Set `finished_at` when solved reaches 4 or mistakes reaches 4.
@@ -210,13 +236,17 @@ rankWeek(attempts) -> [{playerId, place, points}]
   sort key: groups_solved DESC, mistakes ASC, solveMs ASC (null = slowest)
   identical keys share a place; points = average of the POINTS[] slots they occupy
   POINTS = [10, 7, 5, 4, 3, 2, 1]   // 8th+ (not expected) gets 1
+scoreWeek(puzzles) -> [{playerId, place, points, puzzles[]}]
+  rankWeek per non-voided puzzle; points = average over them (missed = 0); place by that average
 season(weeks) -> [{playerId, total, wins, bestWeek, perWeek[]}]
-  includes only weeks where puzzle.status='active' AND phase != 'open'
+  includes only weeks with phase != 'open' and at least one active puzzle
 ```
 
 **Leak to watch for:** standings exclude the week that is still open, except for a viewer who has
-finished it (`results.seasonWeeksFor`). Then the open week counts only finished attempts, so
-someone mid-game never shows a partial score, and a viewer who hasn't played sees nothing new.
+finished one of its puzzles (`results.seasonWeeksFor`). Then the open week counts only finished
+attempts on the puzzles that viewer has finished; their other puzzles count as empty (0 for
+everyone, same denominator). Someone mid-game never shows a partial score, and a viewer sees
+nothing about a puzzle they haven't finished.
 
 Unit tests cover: the tie-averaging examples from the concept doc (two tied for 1st get 8.5 each, the
 next player is 3rd), missed week = 0, voided weeks excluded, an unfinished attempt ranked below finished
@@ -226,18 +256,23 @@ ones with the same key, and the season tiebreak.
 
 - During the open phase, `/uke/[n]` serves the live view described in Decisions (finished
   viewers only, no groups, no voting). Everyone else gets a 404.
-- `/week/[n]` (phase `review` or `closed`) shows all four groups and the weekly ranking with each
+- `/uke/[n]` shows the week's average-points ranking and links to its puzzles; a single-puzzle
+  week redirects to `/uke/[n]/1`. While the week is open it is provisional and includes only the
+  puzzles the viewer has finished.
+- `/uke/[n]/[p]` (phase `review` or `closed`) shows all four groups and the weekly ranking with each
   player's guess grid (the coloured squares).
-- `?/vote` is allowed only when the player has an attempt and the phase is `review`. It upserts the vote.
+- `?/vote` (per puzzle) is allowed only when the player has an attempt on it and the phase is `review`. It upserts the vote.
   The page shows only _your_ vote, never tallies.
 - `/admin` (`isAdmin` only, enforced in the `load` and in every action):
-  - per week: `n of m voted bad`
+  - per puzzle: `n of m voted bad`
   - void/unvoid toggle plus a `void_note`
   - **no puzzle contents for future weeks**, to make the honor system easier to keep
 
 ## Puzzle generation script
 
-`pnpm generate --weeks 1-13 --reserves 2 [--replace 5]`
+`pnpm generate --weeks 1-13 --reserves 2 [--replace 5:2]`
+
+A week gets as many puzzles as the calendar gives it; existing ones are skipped.
 
 - Calls the Claude API (`@anthropic-ai/sdk`, model `claude-opus-5-5`) **one puzzle at a time**. Each
   call passes all previously generated words and categories, plus any `void_note`s, so the season
@@ -317,6 +352,11 @@ Note: week 1 opened Sun Oct 4 00:00 Oslo time, which was 22:00 UTC on Oct 3.
 **M2, by Sat Oct 10 (before week 2 opens)**
 
 - `/admin` with vote totals and void toggle, the PWA manifest and icons, and backup cron.
+
+**M3, by Mon Oct 19 (week 3)**
+
+- Three puzzles a week (Mon/Wed/Fri), averaged weekly points, per-puzzle results, voting and
+  voiding, the "Ny" badge, and the compressed final week. Generate slots 2–3 for weeks 3–13.
 
 **Later (optional)**
 

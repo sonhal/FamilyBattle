@@ -11,8 +11,9 @@ Paste this one line into the VPS agent:
 
 Ordkampen (repo `sonhal/FamilyBattle`) is a weekly Norwegian word-puzzle league for a family. It
 runs on this VPS next to nyttig, in the same style: Docker containers published on host
-loopback ports, Caddy and Authelia on the host. The season runs Sun Oct 4 – Jan 3. Week 1 is
-already open, so getting it playable is urgent.
+loopback ports, Caddy and Authelia on the host. The season runs Sun Oct 4 – Thu Dec 31 (final
+results at 16:00 on New Year's Eve). Weeks 1–2 have one puzzle each; from week 3 (Mon Oct 19)
+every week has three.
 
 `docs/DEPLOY.md` in the repository is the runbook. It uses `battle.example.com` as a
 placeholder: ask sonhal for the real domain and use it wherever the placeholder appears. Never
@@ -51,7 +52,8 @@ Follow `docs/DEPLOY.md`:
 4. **Step 7, verify.** Run all four checks. Every one must give the expected result.
 5. **Step 5, puzzles.** Ask sonhal for the Anthropic API key if it isn't available to you.
    Generate week 1 first, then weeks 2–13 and 2 reserves, all with `--quiet`.
-   `SELECT id, week, status FROM puzzles` should then list weeks 1–13 plus 2 rows with an empty week.
+   `SELECT id, week, slot, status FROM puzzles` should then list one puzzle for weeks 1–2, three
+   (slots 1–3) for weeks 3–13, and 2 rows with an empty week.
 6. **Step 8, backups.** Install the nightly cron job and run it once by hand. Check that a file
    appears in `/var/backups/familybattle/`.
 
@@ -61,7 +63,7 @@ Write a short report to sonhal:
 
 - the deployed version (the `/healthz` output)
 - the result of each step 7 check (status codes, and the `ss` output)
-- which weeks have puzzles (from the `SELECT id, week, status` query only)
+- which weeks have puzzles (from the `SELECT id, week, slot, status` query only)
 - anything you changed outside `/opt/familybattle` (files edited, with backup paths)
 - anything that needs his decision
 
@@ -71,3 +73,7 @@ When asked to upgrade, follow "Upgrading" in `docs/DEPLOY.md`: check out the new
 `FAMILYBATTLE_VERSION`, pull both images, back up, restart, and confirm `/healthz` shows the
 new version. Read the release notes first. If a release says it needs new `.env` keys or
 Caddy changes, apply those too.
+
+The release that introduces three puzzles a week also needs the extra puzzles: follow "Upgrading
+to three puzzles a week" in `docs/DEPLOY.md` (generate `--weeks 3-13 --quiet`, before Mon Oct 19)
+and report the per-week puzzle counts from the query it gives.

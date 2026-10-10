@@ -20,7 +20,12 @@
 <header>
 	<a class="brand" href="/">Ordkampen</a>
 	<nav>
-		<a href="/" aria-current={page.url.pathname === '/' ? 'page' : undefined}>Spill</a>
+		<a href="/" aria-current={page.url.pathname === '/' ? 'page' : undefined}
+			>Spill{#if data.unstarted > 0}<span
+					class="new"
+					title="{data.unstarted} {data.unstarted === 1 ? 'ny oppgave' : 'nye oppgaver'}">Ny</span
+				>{/if}</a
+		>
 		<a href="/stilling" aria-current={page.url.pathname === '/stilling' ? 'page' : undefined}
 			>Stilling</a
 		>
@@ -119,6 +124,17 @@
 		color: var(--muted);
 		text-decoration: none;
 		font-size: 0.95rem;
+	}
+
+	nav .new {
+		margin-left: 4px;
+		padding: 0 6px;
+		border-radius: 999px;
+		background: #dc2626;
+		color: #fff;
+		font-size: 0.7rem;
+		font-weight: 700;
+		vertical-align: 2px;
 	}
 
 	nav a[aria-current='page'] {

@@ -28,6 +28,8 @@ export const config = {
 	// Season calendar.
 	seasonStart: env.SEASON_START ?? '2026-10-04',
 	seasonWeeks: Number(env.SEASON_WEEKS ?? 13),
+	// Leading weeks with one Sun–Wed puzzle; later weeks have three (Mon/Wed/Fri).
+	seasonSingleWeeks: Number(env.SEASON_SINGLE_WEEKS ?? 2),
 
 	// Development helpers, ignored in production.
 	production: env.NODE_ENV === 'production',
@@ -38,3 +40,9 @@ export const config = {
 export function now(): Date {
 	return config.nowOverride ? new Date(config.nowOverride) : new Date();
 }
+
+export const season = {
+	start: config.seasonStart,
+	weeks: config.seasonWeeks,
+	singleWeeks: config.seasonSingleWeeks
+};

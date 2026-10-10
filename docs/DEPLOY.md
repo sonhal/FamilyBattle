@@ -121,11 +121,13 @@ ANTHROPIC_API_KEY=sk-ant-... docker compose run --rm tools generate --weeks 2-13
 
 - **Always pass `--quiet`.** The admin also plays; quiet mode prints neither the puzzles nor
   the rejection reasons (which quote words).
+- A week gets as many puzzles as the calendar gives it: one in weeks 1–2
+  (`SEASON_SINGLE_WEEKS`), three from week 3. That is 35 puzzles plus reserves for this season.
 - Each puzzle is validated, then reviewed by a separate Claude call for words that could fit
   another group, and regenerated if flagged. Expect a few minutes per puzzle.
-- Re-running is safe: weeks that already have a puzzle are skipped.
+- Re-running is safe: puzzles that already exist are skipped.
 - See what exists without revealing answers:
-  `docker compose run --rm tools sql "SELECT id, week, status FROM puzzles"`
+  `docker compose run --rm tools sql "SELECT id, week, slot, status FROM puzzles"`
 
 ## 6. Caddy site (on the host)
 
@@ -203,7 +205,7 @@ curl -s -o /dev/null -w '%{http_code}\n' -H 'Remote-User: x' -H 'Remote-Groups: 
 
 Then in a browser:
 
-- Log in as a player: "Uke 1 av 13" and a Start button, with your name top right.
+- Log in as a player: "Uke N av 13" and a Start button, with your name top right.
 - Log in as someone outside the groups: Authelia denies access.
 
 ## 8. Backups
@@ -229,11 +231,25 @@ docker compose up -d familybattle
 curl -s http://127.0.0.1:7080/healthz        # ok vX.Y.Z
 ```
 
+### Upgrading to three puzzles a week
+
+The release that brings three puzzles a week (from week 3, Mon Oct 19) migrates the database on
+startup: existing puzzles become puzzle 1 of their week. Back up first (above), then fill
+puzzles 2 and 3 of weeks 3–13 (22 puzzles) **before Mon Oct 19 00:00**:
+
+```sh
+ANTHROPIC_API_KEY=sk-ant-... docker compose run --rm tools generate --weeks 3-13 --quiet
+docker compose run --rm tools sql "SELECT week, COUNT(*) FROM puzzles WHERE week IS NOT NULL GROUP BY week"
+```
+
+Weeks 1–2 should show 1 and weeks 3–13 should show 3. The admin page flags any missing puzzle.
+No `.env` change is needed; `SEASON_SINGLE_WEEKS` defaults to 2.
+
 ## Day-to-day operations
 
-| Task                        | Command                                                                                     |
-| --------------------------- | ------------------------------------------------------------------------------------------- |
-| Logs                        | `docker compose logs -f familybattle`                                                       |
-| Inspect data                | `docker compose run --rm tools sql "SELECT * FROM players"`                                 |
-| Void or restore a week      | `https://battle.example.com/admin` (members of `familybattle-admin`), after play has closed |
-| Regenerate an unplayed week | `ANTHROPIC_API_KEY=... docker compose run --rm tools generate --replace N --quiet`          |
+| Task                          | Command                                                                                     |
+| ----------------------------- | ------------------------------------------------------------------------------------------- |
+| Logs                          | `docker compose logs -f familybattle`                                                       |
+| Inspect data                  | `docker compose run --rm tools sql "SELECT * FROM players"`                                 |
+| Void or restore a puzzle      | `https://battle.example.com/admin` (members of `familybattle-admin`), after its week closes |
+| Regenerate an unplayed puzzle | `ANTHROPIC_API_KEY=... docker compose run --rm tools generate --replace WEEK:N --quiet`     |

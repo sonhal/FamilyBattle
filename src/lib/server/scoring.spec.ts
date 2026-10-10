@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { rankWeek, seasonStandings, type SeasonWeek, type WeekResult } from './scoring';
+import {
+	rankWeek,
+	scoreWeek,
+	seasonStandings,
+	type SeasonPuzzle,
+	type SeasonWeek,
+	type WeekResult
+} from './scoring';
 
 const r = (
 	playerId: number,
@@ -36,11 +43,62 @@ describe('rankWeek', () => {
 	});
 });
 
+const puzzle = (slot: number, results: WeekResult[], voided = false): SeasonPuzzle => ({
+	slot,
+	voided,
+	results
+});
+
+describe('scoreWeek', () => {
+	it('averages points over the week’s puzzles, counting a missed puzzle as 0', () => {
+		const s = scoreWeek([
+			puzzle(1, [r(1, 4, 0), r(2, 4, 1)]), // p1 10, p2 7
+			puzzle(2, [r(2, 4, 0), r(1, 4, 1)]), // p2 10, p1 7
+			puzzle(3, [r(1, 4, 0)]) // p1 10, p2 missed
+		]);
+		expect(s.map((x) => [x.playerId, x.place, x.points])).toEqual([
+			[1, 1, 9],
+			[2, 2, 17 / 3]
+		]);
+		expect(s[1].puzzles.map((p) => p.placement?.points ?? null)).toEqual([7, 10, null]);
+	});
+
+	it('leaves voided puzzles out of the average', () => {
+		const s = scoreWeek([
+			puzzle(1, [r(1, 4, 0), r(2, 4, 1)]),
+			puzzle(2, [r(2, 4, 0), r(1, 0, 4)], true),
+			puzzle(3, [r(1, 4, 0), r(2, 4, 1)])
+		]);
+		expect(s.map((x) => [x.playerId, x.points])).toEqual([
+			[1, 10],
+			[2, 7]
+		]);
+		expect(s[0].puzzles.map((p) => p.slot)).toEqual([1, 3]);
+	});
+
+	it('shares the place on equal averages', () => {
+		const s = scoreWeek([
+			puzzle(1, [r(1, 4, 0), r(2, 4, 1), r(3, 4, 2)]), // 10, 7, 5
+			puzzle(2, [r(2, 4, 0), r(3, 4, 1), r(1, 4, 2)]), // 10, 7, 5
+			puzzle(3, [r(3, 4, 0), r(1, 4, 1), r(2, 4, 2)]) // 10, 7, 5
+		]);
+		expect(s.map((x) => x.place)).toEqual([1, 1, 1]);
+	});
+
+	it('equals the puzzle ranking for a single-puzzle week', () => {
+		const s = scoreWeek([puzzle(1, [r(1, 4, 0, 1000), r(2, 4, 0, 1000), r(3, 2, 4)])]);
+		expect(s.map((x) => [x.playerId, x.place, x.points])).toEqual([
+			[1, 1, 8.5],
+			[2, 1, 8.5],
+			[3, 3, 5]
+		]);
+	});
+});
+
 describe('seasonStandings', () => {
 	const week = (n: number, results: WeekResult[], voided = false): SeasonWeek => ({
 		week: n,
-		voided,
-		results
+		puzzles: [puzzle(1, results, voided)]
 	});
 
 	it('sums points and scores a missed week as 0', () => {
@@ -141,5 +199,39 @@ describe('seasonStandings', () => {
 			[10, 1]
 		]);
 		expect(s[0].place).toBe(s[1].place);
+	});
+
+	it('mixes single-puzzle weeks and averaged weeks on the same scale', () => {
+		const s = seasonStandings(
+			[
+				week(1, [r(1, 4, 0), r(2, 4, 1)]), // p1 10, p2 7
+				{
+					week: 2,
+					puzzles: [
+						puzzle(1, [r(2, 4, 0), r(1, 4, 1)]), // p2 10, p1 7
+						puzzle(2, [r(2, 4, 0), r(1, 4, 1)]), // p2 10, p1 7
+						puzzle(3, [r(2, 4, 0)]) // p2 10, p1 missed
+					]
+				}
+			],
+			13
+		);
+		const byId = Object.fromEntries(s.map((x) => [x.playerId, x]));
+		expect(byId[1]).toMatchObject({ total: 10 + 14 / 3, wins: 1 });
+		expect(byId[2]).toMatchObject({ total: 17, wins: 1 });
+	});
+
+	it('voids a week only when all its puzzles are voided', () => {
+		const partly: SeasonWeek = {
+			week: 1,
+			puzzles: [puzzle(1, [r(1, 4, 0)], true), puzzle(2, [r(1, 4, 0)])]
+		};
+		const fully: SeasonWeek = {
+			week: 2,
+			puzzles: [puzzle(1, [r(1, 4, 0)], true), puzzle(2, [r(1, 4, 0)], true)]
+		};
+		const s = seasonStandings([partly, fully], 13);
+		expect(s[0].total).toBe(10);
+		expect(s[0].weeks.map((w) => w.week)).toEqual([1]);
 	});
 });

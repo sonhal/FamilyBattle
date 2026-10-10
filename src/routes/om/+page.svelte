@@ -2,6 +2,8 @@
 	import GroupRow from '#lib/components/GroupRow.svelte';
 
 	let { data } = $props();
+
+	const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 </script>
 
 <svelte:head>
@@ -13,7 +15,7 @@
 <section>
 	<h2>Slik spiller du</h2>
 	<p>
-		Hver uke får du 16 ord. De hører sammen i fire skjulte grupper på fire ord. Velg fire ord du
+		Hver oppgave har 16 ord. De hører sammen i fire skjulte grupper på fire ord. Velg fire ord du
 		tror hører sammen, og trykk Send. Treffer du, legger gruppen seg fast med navnet sitt.
 	</p>
 	<div class="example">
@@ -34,7 +36,7 @@
 		<li>«Én unna» betyr at tre av de fire ordene hører sammen.</li>
 		<li>Gjetter du det samme to ganger, teller det ikke som feil.</li>
 		<li>
-			Du har <strong>ett forsøk</strong> per uke. Klokka starter når du trykker Start, og brukes bare
+			Du har <strong>ett forsøk</strong> per oppgave. Klokka starter når du trykker Start, og brukes bare
 			ved likt resultat.
 		</li>
 	</ul>
@@ -42,24 +44,30 @@
 
 <section>
 	<h2>Uka</h2>
+	<p>Hver uke har {data.perWeek} oppgaver.</p>
 	<dl class="week">
-		<dt>Søndag–onsdag</dt>
+		<dt>{cap(data.dropDays)}</dt>
 		<dd>
-			Ukens oppgave er åpen. Spill når det passer, frem til onsdag kl. 23.59. Når du er ferdig, ser
-			du resultatene og stillingen så langt, oppdatert etter hvert som de andre blir ferdige.
+			En ny oppgave kommer kl. 00.00. Alle ukens oppgaver er åpne til {data.playEndsDay} kl. 23.59, så
+			du kan ta dem når det passer. Når du er ferdig med en oppgave, ser du resultatene og stillingen
+			så langt, oppdatert etter hvert som de andre blir ferdige.
 		</dd>
-		<dt>Torsdag–lørdag</dt>
+		<dt>{cap(data.revealDay)}</dt>
 		<dd>
-			Svarene og ukens endelige resultater vises. Du kan stemme hvis du synes oppgaven var
-			urettferdig, og admin kan annullere den.
+			Svarene og ukens endelige resultater vises, samtidig som neste uke starter. Hele uka kan du
+			stemme hvis du synes en oppgave var urettferdig, og admin kan annullere den.
 		</dd>
-		<dt>Søndag</dt>
-		<dd>Ny oppgave.</dd>
 	</dl>
 	<p>
-		Plassen din avgjøres av antall grupper du fant, så færrest feil, så tiden. Plassene gir
-		{data.points.join(', ')} poeng. Likt resultat deler poengene, og en uke du ikke spiller gir 0.
+		Plassen din i hver oppgave avgjøres av antall grupper du fant, så færrest feil, så tiden.
+		Plassene gir {data.points.join(', ')} poeng, og likt resultat deler poengene. Ukepoengene er snittet
+		av ukens oppgaver. En oppgave du ikke spiller gir 0, så det lønner seg å ta alle.
 	</p>
+	{#if data.singleWeeks > 0}
+		<p class="muted">
+			{data.singleWeeks === 1 ? 'Uke 1' : `Uke 1–${data.singleWeeks}`} hadde én oppgave hver, åpen søndag–onsdag.
+		</p>
+	{/if}
 </section>
 
 <section>
@@ -70,12 +78,12 @@
 		uke ødelegger ikke alt.
 	</p>
 	<p class="finale">
-		Siste uke stenger {data.lastPlayDay}.
+		Siste uke er kortere: oppgavene kommer {data.finalDropDays}, og alt stenger {data.finalEnd}.
 		{#if data.winnerOnNewYearsEve}
-			Spillet avsluttes nyttårsaften, {data.winnerDay}, da de siste resultatene kommer. Sesongens
-			vinner kåres under nyttårsmiddagen.
+			Da kommer de siste resultatene. Spillet avsluttes nyttårsaften, og sesongens vinner kåres
+			under nyttårsmiddagen.
 		{:else}
-			{data.winnerDay} kommer de siste resultatene, og sesongens vinner kåres.
+			Da kommer de siste resultatene, og sesongens vinner kåres.
 		{/if}
 	</p>
 	<p class="muted">Ved likt totalt vinner den med flest ukeseire, deretter beste enkeltuke.</p>

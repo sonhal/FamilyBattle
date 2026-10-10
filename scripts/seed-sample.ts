@@ -2,11 +2,13 @@
  * Inserts a fixed sample puzzle for local testing (no API key needed).
  *
  *   pnpm seed:sample 1      # sample puzzle as week 1
+ *   pnpm seed:sample 3      # every puzzle of week 3 (the same sample, shuffled differently)
  */
-import { config } from '../src/lib/server/config.ts';
+import { config, season } from '../src/lib/server/config.ts';
 import { openDatabase } from '../src/lib/server/db.ts';
 import { validatePuzzle, type Puzzle } from '../src/lib/server/puzzle-schema.ts';
 import { createRepo } from '../src/lib/server/repo.ts';
+import { puzzleCount } from '../src/lib/server/schedule.ts';
 
 if (config.production) {
 	console.error('Refusing to seed sample data with NODE_ENV=production.');
@@ -28,9 +30,11 @@ const problems = validatePuzzle(sample);
 if (problems.length) throw new Error(problems.join('; '));
 
 const repo = createRepo(openDatabase(config.databasePath));
-if (repo.puzzleForWeek(week)) {
-	console.log(`Week ${week} already has a puzzle.`);
-} else {
-	repo.insertPuzzle(week, sample);
-	console.log(`Inserted sample puzzle as week ${week} into ${config.databasePath}`);
+for (let slot = 1; slot <= puzzleCount(season, week); slot++) {
+	if (repo.puzzle(week, slot)) {
+		console.log(`Week ${week} puzzle ${slot} already exists.`);
+	} else {
+		repo.insertPuzzle(sample, { week, slot });
+		console.log(`Inserted the sample as week ${week} puzzle ${slot} into ${config.databasePath}`);
+	}
 }

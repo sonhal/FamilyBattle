@@ -12,8 +12,18 @@
 		board,
 		form,
 		closesAt,
-		week
-	}: { board: BoardView; form: FormResult; closesAt: string; week: number } = $props();
+		week,
+		slot,
+		multi
+	}: {
+		board: BoardView;
+		form: FormResult;
+		closesAt: string;
+		week: number;
+		slot: number;
+		/** The week has more than one puzzle. */
+		multi: boolean;
+	} = $props();
 
 	let selected = $state<string[]>([]);
 	let localOrder = $state<string[] | null>(null);
@@ -71,18 +81,18 @@
 
 {#if board.finished}
 	<section class="done">
-		<h2>{board.revealed.length === 0 ? 'Løst!' : 'Bedre lykke neste uke!'}</h2>
+		<h2>{board.revealed.length === 0 ? 'Løst!' : 'Bedre lykke neste gang!'}</h2>
 		{#each board.revealed as g (g.category)}
 			<GroupRow group={g} />
 		{/each}
 		{#if board.grid}
 			<div class="emoji"><GuessGrid grid={board.grid} label="Dine gjetninger" /></div>
 		{/if}
-		<p><a class="results" href="/uke/{week}">Se resultatene så langt</a></p>
+		<p><a class="results" href="/uke/{week}/{slot}">Se resultatene så langt</a></p>
 		<p class="muted">
-			Listen oppdateres etter hvert som andre blir ferdige. Svarene og den endelige listen kommer <LocalTime
-				iso={closesAt}
-			/>.
+			Listen oppdateres etter hvert som andre blir ferdige. Svarene og den endelige listen{multi
+				? ' for alle ukens oppgaver'
+				: ''} kommer <LocalTime iso={closesAt} />.
 		</p>
 	</section>
 {:else}
@@ -99,7 +109,7 @@
 
 	<form
 		method="POST"
-		action="?/guess"
+		action="?/guess&oppgave={slot}"
 		use:enhance={() => {
 			submitting = true;
 			return async ({ result, update }) => {

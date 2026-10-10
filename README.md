@@ -1,9 +1,10 @@
 # Family Battle
 
-A weekly Connections-style puzzle league for the family: one puzzle per week, played
-asynchronously Sunday to Wednesday, scored across the season. Built with SvelteKit 3,
-SQLite and the Claude API (for puzzle generation). Once you've finished the week's puzzle you
-see the results so far; answers and final results come on Thursday.
+A weekly Connections-style puzzle league for the family: three puzzles a week, dropping Monday,
+Wednesday and Friday and open until Sunday night, scored across the season (each week's points
+are the average over its puzzles). Built with SvelteKit 3, SQLite and the Claude API (for puzzle
+generation). Once you've finished a puzzle you see the results so far; answers and final results
+come on Monday.
 
 Players see Norwegian (Bokmål), puzzles included. Code, config and documentation are in English.
 
@@ -16,8 +17,8 @@ Players see Norwegian (Bokmål), puzzles included. Code, config and documentatio
 
 ```sh
 pnpm install
-pnpm seed:sample 1                     # sample puzzle as week 1 in ./data/league.db
-DEV_USERS="sonhal:admin,anna,bob" NOW_OVERRIDE="2026-10-04T10:00:00Z" pnpm dev
+pnpm seed:sample 3                     # sample puzzles for week 3 in ./data/league.db
+DEV_USERS="sonhal:admin,anna,bob" NOW_OVERRIDE="2026-10-21T10:00:00Z" pnpm dev
 ```
 
 There is no Authelia in dev. `DEV_USERS` fakes the identity headers, and `?as=anna` switches
@@ -35,7 +36,7 @@ pnpm lint         # prettier
 ANTHROPIC_API_KEY=... pnpm generate --weeks 1-13 --reserves 2 --quiet
 ```
 
-See `scripts/generate-puzzles.ts` for options (`--replace`, `--dry-run`, `--language`).
+See `scripts/generate-puzzles.ts` for options (`--replace WEEK:N`, `--dry-run`, `--language`).
 
 ## CI
 

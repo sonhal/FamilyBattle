@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { adminOverview, setWeekVoided } from './admin';
+import { adminOverview, setPuzzleVoided } from './admin';
 import { openDatabase } from './db';
 import type { Puzzle } from './puzzle-schema';
 import { createRepo } from './repo';
 import { standingsAt } from './results';
 
-const season = { start: '2026-10-04', weeks: 13 };
+const season = { start: '2026-10-04', weeks: 13, singleWeeks: 2 };
 const puzzle: Puzzle = {
 	groups: [
 		{ category: 'SecretA', color: 'yellow', words: ['a1', 'a2', 'a3', 'a4'] },
@@ -21,9 +21,9 @@ function setup() {
 	const repo = createRepo(openDatabase(':memory:'));
 	const anna = repo.upsertPlayer('anna', 'Anna');
 	const bob = repo.upsertPlayer('bob', 'Bob');
-	const w1 = repo.insertPuzzle(1, puzzle);
-	repo.insertPuzzle(2, puzzle);
-	repo.insertPuzzle(null, puzzle);
+	const w1 = repo.insertPuzzle(puzzle, { week: 1, slot: 1 });
+	repo.insertPuzzle(puzzle, { week: 2, slot: 1 });
+	repo.insertPuzzle(puzzle);
 	for (const p of [anna, bob]) {
 		const a = repo.startAttempt(w1, p.id, sunday);
 		repo.saveAttempt(a.id, {
@@ -45,52 +45,60 @@ describe('adminOverview', () => {
 		const o = adminOverview(repo, season, thursday);
 		expect(o.weeks).toHaveLength(13);
 		expect(o.reserves).toBe(1);
-		expect(o.weeks[0]).toMatchObject({
-			week: 1,
-			phase: 'review',
-			hasPuzzle: true,
-			status: 'active',
-			played: 2,
-			votesBad: 1,
-			votesFine: 1,
-			canVoid: true
-		});
+		expect(o.weeks[0]).toMatchObject({ week: 1, phase: 'review', canVoid: true });
+		expect(o.weeks[0].puzzles).toEqual([
+			{
+				slot: 1,
+				dropDay: 'søn. 4.10.',
+				hasPuzzle: true,
+				status: 'active',
+				voidNote: null,
+				played: 2,
+				votesBad: 1,
+				votesFine: 1
+			}
+		]);
 		expect(o.weeks[1]).toMatchObject({ week: 2, phase: 'upcoming', canVoid: false });
-		expect(o.weeks[2]).toMatchObject({ hasPuzzle: false });
+		expect(o.weeks[2].puzzles.map((p) => [p.slot, p.dropDay, p.hasPuzzle])).toEqual([
+			[1, 'man. 19.10.', false],
+			[2, 'ons. 21.10.', false],
+			[3, 'fre. 23.10.', false]
+		]);
 		const json = JSON.stringify(o);
 		for (const secret of ['Secret', 'a1', 'd4']) expect(json).not.toContain(secret);
 	});
 });
 
-describe('setWeekVoided', () => {
+describe('setPuzzleVoided', () => {
 	it('voids a reviewed week, removing it from the standings, and restores it', () => {
 		const { repo } = setup();
 		expect(standingsAt(repo, season, thursday)).toHaveLength(2);
 
-		expect(setWeekVoided(repo, season, thursday, 1, true, ' two words fit two groups ')).toEqual({
-			ok: true
-		});
-		expect(repo.puzzleForWeek(1)).toMatchObject({
+		expect(
+			setPuzzleVoided(repo, season, thursday, 1, 1, true, ' two words fit two groups ')
+		).toEqual({ ok: true });
+		expect(repo.puzzle(1, 1)).toMatchObject({
 			status: 'voided',
 			voidNote: 'two words fit two groups'
 		});
 		expect(standingsAt(repo, season, thursday)).toEqual([]);
 
-		expect(setWeekVoided(repo, season, thursday, 1, false, null)).toEqual({ ok: true });
-		expect(repo.puzzleForWeek(1)).toMatchObject({ status: 'active', voidNote: null });
+		expect(setPuzzleVoided(repo, season, thursday, 1, 1, false, null)).toEqual({ ok: true });
+		expect(repo.puzzle(1, 1)).toMatchObject({ status: 'active', voidNote: null });
 		expect(standingsAt(repo, season, thursday)).toHaveLength(2);
 	});
 
 	it('requires a reason when voiding', () => {
 		const { repo } = setup();
-		expect(setWeekVoided(repo, season, thursday, 1, true, '  ')).toMatchObject({ ok: false });
+		expect(setPuzzleVoided(repo, season, thursday, 1, 1, true, '  ')).toMatchObject({ ok: false });
 	});
 
 	it('refuses weeks that are still open or upcoming, or have no puzzle', () => {
 		const { repo } = setup();
-		expect(setWeekVoided(repo, season, sunday, 1, true, 'x')).toMatchObject({ ok: false });
-		expect(setWeekVoided(repo, season, thursday, 2, true, 'x')).toMatchObject({ ok: false });
-		expect(setWeekVoided(repo, season, thursday, 3, true, 'x')).toMatchObject({ ok: false });
-		expect(setWeekVoided(repo, season, thursday, 99, true, 'x')).toMatchObject({ ok: false });
+		expect(setPuzzleVoided(repo, season, sunday, 1, 1, true, 'x')).toMatchObject({ ok: false });
+		expect(setPuzzleVoided(repo, season, thursday, 2, 1, true, 'x')).toMatchObject({ ok: false });
+		expect(setPuzzleVoided(repo, season, thursday, 3, 1, true, 'x')).toMatchObject({ ok: false });
+		expect(setPuzzleVoided(repo, season, thursday, 99, 1, true, 'x')).toMatchObject({ ok: false });
+		expect(setPuzzleVoided(repo, season, thursday, 1, 2, true, 'x')).toMatchObject({ ok: false });
 	});
 });

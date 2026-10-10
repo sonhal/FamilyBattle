@@ -13,6 +13,8 @@ export interface Player {
 export interface PuzzleRow {
 	id: number;
 	week: number | null;
+	/** 1-based position within the week; null for a reserve. */
+	slot: number | null;
 	groups: Group[];
 	status: 'active' | 'voided';
 	voidNote: string | null;
@@ -28,6 +30,7 @@ export interface Attempt extends AttemptState {
 interface RawPuzzle {
 	id: number;
 	week: number | null;
+	slot: number | null;
 	groups: string;
 	status: 'active' | 'voided';
 	void_note: string | null;
@@ -48,6 +51,7 @@ interface RawAttempt {
 const toPuzzle = (r: RawPuzzle): PuzzleRow => ({
 	id: r.id,
 	week: r.week,
+	slot: r.slot,
 	groups: JSON.parse(r.groups) as Group[],
 	status: r.status,
 	voidNote: r.void_note
@@ -90,22 +94,32 @@ export function createRepo(db: Database.Database) {
 			).map((r) => ({ id: r.id, authUser: r.auth_user, displayName: r.display_name }));
 		},
 
-		puzzleForWeek(week: number): PuzzleRow | null {
-			const r = db.prepare('SELECT * FROM puzzles WHERE week = ?').get(week) as
+		puzzle(week: number, slot: number): PuzzleRow | null {
+			const r = db.prepare('SELECT * FROM puzzles WHERE week = ? AND slot = ?').get(week, slot) as
 				RawPuzzle | undefined;
 			return r ? toPuzzle(r) : null;
 		},
 
-		allPuzzles(): PuzzleRow[] {
+		/** The week's puzzles in slot order. */
+		puzzlesForWeek(week: number): PuzzleRow[] {
 			return (
-				db.prepare('SELECT * FROM puzzles ORDER BY week IS NULL, week, id').all() as RawPuzzle[]
+				db.prepare('SELECT * FROM puzzles WHERE week = ? ORDER BY slot').all(week) as RawPuzzle[]
 			).map(toPuzzle);
 		},
 
-		insertPuzzle(week: number | null, puzzle: Puzzle): number {
+		allPuzzles(): PuzzleRow[] {
+			return (
+				db
+					.prepare('SELECT * FROM puzzles ORDER BY week IS NULL, week, slot, id')
+					.all() as RawPuzzle[]
+			).map(toPuzzle);
+		},
+
+		/** `at` is the puzzle's week and slot; leave it out for a reserve. */
+		insertPuzzle(puzzle: Puzzle, at?: { week: number; slot: number }): number {
 			const r = db
-				.prepare('INSERT INTO puzzles (week, groups) VALUES (?, ?) RETURNING id')
-				.get(week, JSON.stringify(puzzle.groups)) as { id: number };
+				.prepare('INSERT INTO puzzles (week, slot, groups) VALUES (?, ?, ?) RETURNING id')
+				.get(at?.week ?? null, at?.slot ?? null, JSON.stringify(puzzle.groups)) as { id: number };
 			return r.id;
 		},
 

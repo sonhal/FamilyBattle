@@ -1,22 +1,23 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
-	import GroupRow from '#lib/components/GroupRow.svelte';
-	import GuessGrid from '#lib/components/GuessGrid.svelte';
 	import LocalTime from '#lib/components/LocalTime.svelte';
-	import { formatDuration, formatPoints } from '#lib/format.ts';
+	import { formatPoints } from '#lib/format.ts';
 
-	let { data, form } = $props();
+	let { data } = $props();
+
+	type Row = (typeof data.ranking)[number];
+	const breakdown = (row: Row) =>
+		row.puzzles
+			.map((x) => `Oppgave ${x.slot}: ${x.points === null ? '–' : `${formatPoints(x.points)} p`}`)
+			.join(' · ');
 </script>
 
 <svelte:head>
 	<title>Uke {data.week} · Ordkampen</title>
 </svelte:head>
 
-{#if data.week > 1}
-	<nav class="weeks" aria-label="Uker">
-		<a href="/uke/{data.week - 1}">← Uke {data.week - 1}</a>
-	</nav>
-{/if}
+<nav class="weeks" aria-label="Uker">
+	{#if data.week > 1}<a href="/uke/{data.week - 1}">← Uke {data.week - 1}</a>{/if}
+</nav>
 
 <h1>
 	Uke {data.week}
@@ -24,24 +25,27 @@
 	{#if data.voided}<span class="badge">Annullert</span>{/if}
 </h1>
 
-{#if data.voided}
-	<p class="muted">Denne uken teller ikke i sesongen.</p>
-{/if}
-
 {#if data.live}
 	<p class="muted">
-		Uka er fortsatt åpen. Listen viser alle som er ferdige så langt, og plassene kan endre seg.
+		Uka er fortsatt åpen. Bare oppgavene du har fullført er med, og bare de som er ferdige med dem.
 		Svarene og den endelige listen kommer <LocalTime iso={data.revealsAt} />.
 	</p>
-{:else}
-	<section class="groups">
-		{#each data.groups as g (g.category)}
-			<GroupRow group={g} />
-		{/each}
-	</section>
 {/if}
 
-<h2>Resultater</h2>
+<ul class="puzzles">
+	{#each data.puzzles as p (p.slot)}
+		<li>
+			{#if p.linked}
+				<a href="/uke/{data.week}/{p.slot}">Oppgave {p.slot} · {p.day}</a>
+			{:else}
+				<span class="muted">Oppgave {p.slot} · {p.day}</span>
+			{/if}
+			{#if p.voided}<span class="badge">Annullert</span>{/if}
+		</li>
+	{/each}
+</ul>
+
+<h2>Ukens resultat</h2>
 {#if data.ranking.length === 0}
 	<p class="muted">Ingen spilte denne uken.</p>
 {:else}
@@ -51,55 +55,24 @@
 				<div class="place">{row.place}.</div>
 				<div class="who">
 					<strong>{row.name}</strong>
-					<span class="muted">
-						{row.groupsSolved}/4 grupper · {row.mistakes} feil · {formatDuration(row.solveMs)}
-					</span>
+					<span class="muted">{breakdown(row)}</span>
 				</div>
 				<div class="points">{formatPoints(row.points)} p</div>
-				<div class="grid">
-					<GuessGrid grid={row.grid} label="Gjetningene til {row.name}" />
-				</div>
 			</li>
 		{/each}
 	</ol>
 {/if}
 
-{#if data.live && data.playing.length > 0}
-	<h2>Spiller nå</h2>
-	<p class="muted">{data.playing.join(', ')}</p>
-{/if}
-
-{#if !data.live}
-	<section class="vote">
-		<h2>Var oppgaven dårlig?</h2>
-		{#if data.vote.allowed}
-			<p class="muted">
-				Stem hvis et ord passet i flere grupper eller oppgaven var ødelagt. Du kan endre stemmen til <LocalTime
-					iso={data.vote.locksAt}
-				/>.
-			</p>
-			<form method="POST" action="?/vote" use:enhance>
-				<button name="vote" value="bad" class:chosen={data.vote.mine === true}>Ja, dårlig</button>
-				<button name="vote" value="fine" class:chosen={data.vote.mine === false}>Nei, grei</button>
-			</form>
-			{#if data.vote.mine !== null}
-				<p class="small">Din stemme: {data.vote.mine ? 'dårlig' : 'grei'}.</p>
-			{/if}
-			{#if form?.message}<p class="error">{form.message}</p>{/if}
-		{:else if !data.vote.open}
-			<p class="muted">Avstemningen er stengt.</p>
-		{:else}
-			<p class="muted">Bare de som har spilt uke {data.week} kan stemme.</p>
-		{/if}
-	</section>
-{/if}
+<p class="muted small">
+	Hver oppgave gir plasspoeng. Ukepoengene er snittet over ukens oppgaver, og en oppgave du ikke
+	spilte gir 0. <a href="/om">Mer om poengene</a>
+</p>
 
 <style>
 	.weeks {
-		display: flex;
-		justify-content: space-between;
 		font-size: 0.9rem;
 		margin-bottom: 8px;
+		min-height: 1em;
 	}
 
 	a {
@@ -131,9 +104,21 @@
 		color: var(--accent-fg);
 	}
 
-	.groups {
+	.puzzles {
+		list-style: none;
+		padding: 0;
+		margin: 0;
 		display: grid;
+		gap: 6px;
+	}
+
+	.puzzles li {
+		display: flex;
 		gap: 8px;
+		align-items: center;
+		padding: 10px 12px;
+		border: 1px solid var(--border);
+		border-radius: 8px;
 	}
 
 	.ranking {
@@ -147,9 +132,6 @@
 	.ranking li {
 		display: grid;
 		grid-template-columns: 2.2em 1fr auto;
-		grid-template-areas:
-			'place who points'
-			'place grid grid';
 		gap: 4px 8px;
 		padding: 10px 12px;
 		border: 1px solid var(--border);
@@ -161,45 +143,17 @@
 	}
 
 	.place {
-		grid-area: place;
 		font-weight: 800;
 		font-size: 1.1rem;
 	}
 
 	.who {
-		grid-area: who;
 		display: flex;
 		flex-direction: column;
 	}
 
 	.points {
-		grid-area: points;
 		font-weight: 700;
-	}
-
-	.grid {
-		grid-area: grid;
-		font-size: 0.9rem;
-	}
-
-	.vote form {
-		display: flex;
-		gap: 8px;
-	}
-
-	.vote button {
-		padding: 10px 16px;
-		border-radius: 999px;
-		border: 1px solid var(--fg);
-		background: transparent;
-		color: var(--fg);
-		font-weight: 600;
-		cursor: pointer;
-	}
-
-	.vote button.chosen {
-		background: var(--accent);
-		color: var(--accent-fg);
 	}
 
 	.muted {
@@ -208,10 +162,7 @@
 	}
 
 	.small {
+		margin-top: 16px;
 		font-size: 0.85rem;
-	}
-
-	.error {
-		color: #dc2626;
 	}
 </style>

@@ -1,120 +1,64 @@
-import { error, fail } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 import { repo, season } from '#lib/server/index.ts';
 import { now } from '#lib/server/config.ts';
-import { guessGrid } from '#lib/server/game.ts';
-import { liveWeek, solveMs, weekResults } from '#lib/server/results.ts';
-import { closesAt, phaseOf, reviewStartsAt } from '#lib/server/schedule.ts';
-import { rankWeek } from '#lib/server/scoring.ts';
-import type { Actions, PageServerLoad } from './$types';
-
-function parseWeek(param: string) {
-	const week = Number(param);
-	if (!Number.isInteger(week) || week < 1 || week > season.weeks) error(404, 'Ukjent uke.');
-	return week;
-}
-
-function revealedPuzzle(param: string) {
-	const week = parseWeek(param);
-	const phase = phaseOf(season, week, now());
-	// Answers stay hidden until play has closed for everyone.
-	if (phase === 'upcoming' || phase === 'open') error(404, 'Resultatene er ikke klare ennå.');
-	const puzzle = repo.puzzleForWeek(week);
-	if (!puzzle) error(404, 'Ingen oppgave denne uken.');
-	return { week, phase, puzzle };
-}
+import { liveSeasonWeek, liveWeek, revealedSeasonWeeks } from '#lib/server/results.ts';
+import { dropsAt, phaseOf, puzzleCount, reviewStartsAt } from '#lib/server/schedule.ts';
+import { isWeekVoided, scoreWeek, type SeasonWeek } from '#lib/server/scoring.ts';
+import { parseWeek } from './params';
+import type { PageServerLoad } from './$types';
 
 /**
- * While a week is open, a player who has finished it sees a provisional
- * ranking of everyone else who has finished. No answers, no votes, and
- * unfinished attempts appear only as "playing", without their progress.
+ * The week's ranking by average points over its puzzles. A single-puzzle week
+ * has nothing to average, so it goes straight to the puzzle.
  */
-function liveResults(week: number, playerId: number) {
-	const live = liveWeek(repo, season, now(), playerId);
-	if (live?.week !== week) error(404, 'Fullfør ukens oppgave for å se resultatene så langt.');
-	const { puzzle } = live;
-	const names = new Map(repo.players().map((p) => [p.id, p.displayName]));
-	const attempts = repo.attemptsForPuzzle(puzzle.id);
-	const byPlayer = new Map(attempts.map((a) => [a.playerId, a]));
-
-	const ranking = rankWeek(weekResults(repo, puzzle.id, { finishedOnly: true })).map((p) => {
-		const a = byPlayer.get(p.playerId)!;
-		return {
-			name: names.get(p.playerId) ?? '?',
-			isMe: p.playerId === playerId,
-			place: p.place,
-			points: p.points,
-			groupsSolved: p.groupsSolved,
-			mistakes: p.mistakes,
-			solveMs: solveMs(a),
-			grid: guessGrid(puzzle.groups, a.guesses)
-		};
-	});
-	const playing = attempts
-		.filter((a) => a.finishedAt === null)
-		.map((a) => names.get(a.playerId) ?? '?')
-		.sort((a, b) => a.localeCompare(b, 'nb'));
-
-	return {
-		live: true as const,
-		week,
-		weeks: season.weeks,
-		voided: puzzle.status === 'voided',
-		ranking,
-		playing,
-		revealsAt: reviewStartsAt(season, week).toISO()!
-	};
-}
-
 export const load: PageServerLoad = ({ params, locals }) => {
-	const n = parseWeek(params.n);
-	if (phaseOf(season, n, now()) === 'open') return liveResults(n, locals.player.id);
+	const week = parseWeek(params.n);
+	if (puzzleCount(season, week) === 1) redirect(307, `/uke/${week}/1`);
 
-	const { week, phase, puzzle } = revealedPuzzle(params.n);
+	const t = now();
+	const phase = phaseOf(season, week, t);
+	if (phase === 'upcoming') error(404, 'Resultatene er ikke klare ennå.');
+
+	let seasonWeek: SeasonWeek | undefined;
+	let finished: number[] | null = null;
+	if (phase === 'open') {
+		// Provisional: only the puzzles this viewer has finished, finished attempts only.
+		const live = liveWeek(repo, season, t, locals.player.id);
+		if (live?.week !== week)
+			error(404, 'Fullfør en av ukens oppgaver for å se resultatene så langt.');
+		seasonWeek = liveSeasonWeek(repo, live);
+		finished = live.finished;
+	} else {
+		seasonWeek = revealedSeasonWeeks(repo, season, t).find((w) => w.week === week);
+	}
+	if (!seasonWeek) error(404, 'Ingen oppgaver denne uken.');
+
 	const names = new Map(repo.players().map((p) => [p.id, p.displayName]));
-	const attempts = new Map(repo.attemptsForPuzzle(puzzle.id).map((a) => [a.playerId, a]));
+	const day = (slot: number) =>
+		dropsAt(season, week, slot)
+			.setLocale('nb')
+			.toFormat('cccc')
+			.replace(/^./, (c) => c.toUpperCase());
 
-	const ranking = rankWeek(weekResults(repo, puzzle.id)).map((p) => {
-		const a = attempts.get(p.playerId)!;
-		return {
-			name: names.get(p.playerId) ?? '?',
-			isMe: p.playerId === locals.player.id,
-			place: p.place,
-			points: p.points,
-			groupsSolved: p.groupsSolved,
-			mistakes: p.mistakes,
-			solveMs: solveMs(a),
-			grid: guessGrid(puzzle.groups, a.guesses)
-		};
-	});
-
-	const played = attempts.has(locals.player.id);
 	return {
-		live: false as const,
 		week,
 		weeks: season.weeks,
-		groups: puzzle.groups,
-		voided: puzzle.status === 'voided',
-		ranking,
-		vote: {
-			open: phase === 'review',
-			allowed: phase === 'review' && played,
-			played,
-			mine: repo.vote(puzzle.id, locals.player.id),
-			locksAt: closesAt(season, week).toISO()!
-		}
+		live: phase === 'open',
+		revealsAt: reviewStartsAt(season, week).toISO()!,
+		voided: isWeekVoided(seasonWeek),
+		puzzles: seasonWeek.puzzles.map((p) => ({
+			slot: p.slot,
+			day: day(p.slot),
+			voided: p.voided,
+			// While the week is open, only puzzles the viewer has finished have a page.
+			linked: finished === null || finished.includes(p.slot)
+		})),
+		ranking: scoreWeek(seasonWeek.puzzles).map((s) => ({
+			name: names.get(s.playerId) ?? '?',
+			isMe: s.playerId === locals.player.id,
+			place: s.place,
+			points: s.points,
+			puzzles: s.puzzles.map((x) => ({ slot: x.slot, points: x.placement?.points ?? null }))
+		}))
 	};
-};
-
-export const actions: Actions = {
-	vote: async ({ params, locals, request }) => {
-		const { phase, puzzle } = revealedPuzzle(params.n);
-		if (phase !== 'review') return fail(409, { message: 'Avstemningen er stengt.' });
-		if (!repo.attempt(puzzle.id, locals.player.id)) {
-			return fail(403, { message: 'Bare de som har spilt kan stemme.' });
-		}
-		const value = (await request.formData()).get('vote');
-		if (value !== 'bad' && value !== 'fine') return fail(400, { message: 'Ugyldig stemme.' });
-		repo.setVote(puzzle.id, locals.player.id, value === 'bad', now());
-		return { saved: true };
-	}
 };

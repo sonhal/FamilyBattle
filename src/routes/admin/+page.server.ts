@@ -1,6 +1,6 @@
 import { error, fail } from '@sveltejs/kit';
 import { repo, season } from '#lib/server/index.ts';
-import { adminOverview, setWeekVoided } from '#lib/server/admin.ts';
+import { adminOverview, setPuzzleVoided } from '#lib/server/admin.ts';
 import { now } from '#lib/server/config.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -18,17 +18,19 @@ async function update(locals: App.Locals, request: Request, voided: boolean) {
 	requireAdmin(locals);
 	const form = await request.formData();
 	const week = Number(form.get('week'));
+	const slot = Number(form.get('slot'));
 	const note = form.get('note');
-	const result = setWeekVoided(
+	const result = setPuzzleVoided(
 		repo,
 		season,
 		now(),
 		week,
+		slot,
 		voided,
 		typeof note === 'string' ? note : null
 	);
-	if (!result.ok) return fail(400, { week, message: result.message });
-	return { week, saved: true };
+	if (!result.ok) return fail(400, { week, slot, message: result.message });
+	return { week, slot, saved: true };
 }
 
 export const actions: Actions = {

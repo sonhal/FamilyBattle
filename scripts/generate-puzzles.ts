@@ -2,11 +2,13 @@
  * Generates puzzles with the Claude API and stores them in the database.
  *
  *   pnpm generate --weeks 1-13 --reserves 2
- *   pnpm generate --replace 5          # regenerate week 5 (only if nobody has played it)
+ *   pnpm generate --replace 5:2        # regenerate week 5's second puzzle (only if nobody has played it)
  *   pnpm generate --weeks 1-3 --dry-run
  *
- * Idempotent: weeks that already have a puzzle are skipped, so a failed run
- * can simply be repeated. Needs ANTHROPIC_API_KEY in the environment.
+ * A week gets as many puzzles as the season calendar gives it (one in the
+ * single-puzzle weeks, otherwise three). Idempotent: puzzles that already
+ * exist are skipped, so a failed run can simply be repeated. Needs
+ * ANTHROPIC_API_KEY in the environment.
  *
  * Each puzzle that passes validation gets an independent review (a separate
  * Claude call that only sees the finished groups and flags words that could
@@ -17,7 +19,7 @@
  */
 import Anthropic from '@anthropic-ai/sdk';
 import { parseArgs } from 'node:util';
-import { config } from '../src/lib/server/config.ts';
+import { config, season } from '../src/lib/server/config.ts';
 import { openDatabase } from '../src/lib/server/db.ts';
 import {
 	cleanPuzzle,
@@ -27,6 +29,7 @@ import {
 	type Puzzle
 } from '../src/lib/server/puzzle-schema.ts';
 import { createRepo } from '../src/lib/server/repo.ts';
+import { puzzleCount } from '../src/lib/server/schedule.ts';
 import {
 	REVIEW_OUTPUT_SCHEMA,
 	reviewFeedback,
@@ -86,6 +89,21 @@ function parseRange(spec: string): number[] {
 	}
 	if (out.some((w) => !Number.isInteger(w) || w < 1)) throw new Error(`bad --weeks: ${spec}`);
 	return out;
+}
+
+/** "5:2" is week 5, puzzle 2; "5" is allowed for a week with a single puzzle. */
+function parseReplace(spec: string): { week: number; slot: number } {
+	const [week, slot] = spec.split(':').map(Number);
+	if (!Number.isInteger(week) || week < 1 || week > season.weeks) {
+		throw new Error(`bad --replace: ${spec}`);
+	}
+	const count = puzzleCount(season, week);
+	if (slot === undefined && count > 1) {
+		throw new Error(`week ${week} has ${count} puzzles; pass --replace ${week}:N`);
+	}
+	const s = slot ?? 1;
+	if (!Number.isInteger(s) || s < 1 || s > count) throw new Error(`bad --replace: ${spec}`);
+	return { week, slot: s };
 }
 
 function prompt(history: { words: string[]; categories: string[]; voidNotes: string[] }) {
@@ -235,16 +253,18 @@ async function main() {
 		voidNotes: puzzles.filter((p) => p.voidNote).map((p) => p.voidNote!)
 	};
 
-	// Slots to fill: numbered weeks, then reserves (week = null).
-	const slots: (number | null)[] = [];
+	// Puzzles to make: week and slot, then reserves (null).
+	const slots: ({ week: number; slot: number } | null)[] = [];
 
 	if (args.replace) {
-		const week = Number(args.replace);
-		const existing = repo.puzzleForWeek(week);
+		const at = parseReplace(args.replace);
+		const existing = repo.puzzle(at.week, at.slot);
 		if (existing) {
 			const played = repo.countAttempts(existing.id);
 			if (played > 0 && !args.force) {
-				throw new Error(`week ${week} has ${played} attempt(s); pass --force to replace anyway`);
+				throw new Error(
+					`week ${at.week} puzzle ${at.slot} has ${played} attempt(s); pass --force to replace anyway`
+				);
 			}
 			if (!args['dry-run']) {
 				repo.db.transaction(() => {
@@ -254,15 +274,18 @@ async function main() {
 				})();
 			}
 		}
-		slots.push(week);
+		slots.push(at);
 	}
 
 	for (const week of args.weeks ? parseRange(args.weeks) : []) {
-		if (repo.puzzleForWeek(week)) {
-			console.log(`Week ${week}: already has a puzzle, skipping`);
-			continue;
+		if (week > season.weeks) throw new Error(`the season has ${season.weeks} weeks`);
+		for (let slot = 1; slot <= puzzleCount(season, week); slot++) {
+			if (repo.puzzle(week, slot)) {
+				console.log(`Week ${week} puzzle ${slot}: already exists, skipping`);
+				continue;
+			}
+			slots.push({ week, slot });
 		}
-		slots.push(week);
 	}
 	for (let i = 0; i < Number(args.reserves); i++) slots.push(null);
 
@@ -271,8 +294,8 @@ async function main() {
 		return;
 	}
 
-	for (const week of slots) {
-		const label = week === null ? 'Reserve' : `Week ${week}`;
+	for (const at of slots) {
+		const label = at === null ? 'Reserve' : `Week ${at.week} puzzle ${at.slot}`;
 		console.log(`${label}: generating…`);
 		const puzzle = await generateOne(client, history);
 
@@ -287,7 +310,7 @@ async function main() {
 		if (args['dry-run']) {
 			console.log(`${label}: OK (dry run, not saved)`);
 		} else {
-			repo.insertPuzzle(week, puzzle);
+			repo.insertPuzzle(puzzle, at ?? undefined);
 			console.log(`${label}: saved`);
 		}
 	}
